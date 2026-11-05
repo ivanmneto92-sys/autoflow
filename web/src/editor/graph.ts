@@ -180,6 +180,8 @@ export function describeAction(a: any): string {
       return '👤 Passar para atendente';
     case 'webhook':
       return `🌐 Webhook ${a.method} ${a.url}`;
+    case 'create_order':
+      return '🧾 Registrar pedido';
     default:
       return a.type;
   }

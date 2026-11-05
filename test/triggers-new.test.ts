@@ -137,3 +137,38 @@ describe('condição: segue a conta', () => {
     expect(t.store.events.some((e: { type: string }) => e.type === 'follow_check_failed')).toBe(true);
   });
 });
+
+describe('pedidos', () => {
+  it('registra o pedido com número, campos e total; link do WhatsApp leva o resumo', async () => {
+    const { parseMoney } = await import('../src/engine/nodes.js');
+    expect(parseMoney('R$ 1.234,56')).toBe(123456);
+    expect(parseMoney('49.90')).toBe(4990);
+    expect(parseMoney('50')).toBe(5000);
+    expect(parseMoney('abc')).toBeNull();
+
+    const t = setup({ settings: { timezone: 'America/Sao_Paulo', bot_pause_hours: 12, whatsapp: '5531999999999' } });
+    const { flowId } = t.addFlow({
+      start: 'p',
+      nodes: {
+        p: { type: 'ask', data: { text: 'O que vai querer?', save_to: 'pedido', validate: 'text', max_retries: 2 }, next: 'e' },
+        e: { type: 'ask', data: { text: 'Endereço?', save_to: 'endereco', validate: 'text', max_retries: 2 }, next: 'r' },
+        r: { type: 'action', data: { actions: [{ type: 'create_order', summary: '{{field.pedido}}', fields: ['endereco', 'telefone'], total: '59,90' }] }, next: 'c' },
+        c: {
+          type: 'message',
+          data: { text: 'Pedido #{{var.order_number}} anotado!', buttons: [{ label: 'WhatsApp', url: 'https://wa.me/{{whatsapp}}?text=Meu pedido #{{var.order_number}}: {{field.pedido}}' }] },
+        },
+      },
+    });
+    t.addTrigger(flowId, 'dm_keyword', { keywords: ['pedido'] });
+    await t.engine.handleEvent(dm('pedido'));
+    await t.engine.handleEvent(dm('1 pizza calabresa'));
+    await t.engine.handleEvent(dm('Rua A, 10'));
+    expect(t.store.orders[0]).toMatchObject({ number: 1, summary: '1 pizza calabresa', details: [{ label: 'endereco', value: 'Rua A, 10' }], totalCents: 5990 });
+    const last = t.ig.sent.at(-1)!.msg;
+    expect(last.kind).toBe('buttons');
+    if (last.kind !== 'buttons') return;
+    expect(last.text).toBe('Pedido #1 anotado!');
+    const b = last.buttons[0]!;
+    expect(b.type === 'web_url' && b.url).toBe('https://wa.me/5531999999999?text=' + encodeURIComponent('Meu pedido #1: 1 pizza calabresa'));
+  });
+});

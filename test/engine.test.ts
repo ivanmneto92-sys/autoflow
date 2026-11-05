@@ -74,7 +74,7 @@ describe('Comentário → DM', () => {
 });
 
 describe('DM, perguntas e atendimento humano', () => {
-  it('fluxo de pedido do template: coleta, valida telefone e passa para humano', async () => {
+  it('fluxo de pedido do template: coleta, valida telefone e registra o pedido', async () => {
     const t = setup(); // sexta 19h → aberto
     const tpl = loadTemplate();
     const { flowId } = t.addFlow(tpl.flow);
@@ -94,20 +94,32 @@ describe('DM, perguntas e atendimento humano', () => {
     await t.engine.handleEvent(dm('telefone?'));
     expect(textOf(t.ig.sent.at(-1)!.msg)).toContain('DDD');
     await t.engine.handleEvent(dm('(31) 99999-8888'));
+    expect(textOf(t.ig.sent.at(-1)!.msg)).toContain('o que vai querer');
+    await t.engine.handleEvent(dm('1 pizza calabresa grande'));
+    await t.engine.handleEvent(dm('Pix'));
 
     const contact = t.store.contacts[0]!;
     expect(await t.store.getFields(contact.id)).toEqual({
       nome: 'Maria',
       endereco: 'Rua A, 123 - Centro',
       telefone: '31999998888',
+      pedido: '1 pizza calabresa grande',
+      pagamento: 'Pix',
     });
-    expect(await t.store.getTags(contact.id)).toEqual(expect.arrayContaining(['pedido-iniciado', 'atendimento-humano']));
-    expect(textOf(t.ig.sent.at(-1)!.msg)).toContain('Rua A, 123');
-
-    // Robô pausado: nova mensagem não dispara nada
-    const before = t.ig.sent.length;
-    await t.engine.handleEvent(dm('cardapio'));
-    expect(t.ig.sent.length).toBe(before);
+    expect(await t.store.getTags(contact.id)).toEqual(expect.arrayContaining(['pedido-feito']));
+    expect(t.store.orders[0]).toMatchObject({
+      number: 1,
+      summary: '1 pizza calabresa grande',
+      details: [
+        { label: 'nome', value: 'Maria' },
+        { label: 'endereco', value: 'Rua A, 123 - Centro' },
+        { label: 'telefone', value: '31999998888' },
+        { label: 'pagamento', value: 'Pix' },
+      ],
+    });
+    const confirm = textOf(t.ig.sent.at(-1)!.msg);
+    expect(confirm).toContain('Pedido #1 recebido');
+    expect(confirm).toContain('Rua A, 123');
   });
 
   it('fora do horário responde que está fechado', async () => {

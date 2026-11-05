@@ -230,11 +230,12 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
             <div className="row">
               <select
                 className="select"
-                value={b.url !== undefined ? 'url' : 'flow'}
+                value={b.url === undefined ? 'flow' : /^https:\/\/wa\.me\//.test(b.url) ? 'whatsapp' : 'url'}
                 onChange={(e) =>
                   set((d) => {
-                    if (e.target.value === 'url') {
-                      d.buttons[i].url = 'https://';
+                    if (e.target.value === 'url' || e.target.value === 'whatsapp') {
+                      d.buttons[i].url =
+                        e.target.value === 'whatsapp' ? 'https://wa.me/{{whatsapp}}?text=Olá! Vim pelo Instagram 😊' : 'https://';
                       delete d.buttons[i].next;
                     } else {
                       delete d.buttons[i].url;
@@ -246,9 +247,13 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
               >
                 <option value="flow">Continua fluxo</option>
                 <option value="url">Abre link</option>
+                <option value="whatsapp">Abre WhatsApp</option>
               </select>
-              {b.url !== undefined && <input className="input" value={b.url} onChange={(e) => set((d) => (d.buttons[i].url = e.target.value))} />}
+              {b.url !== undefined && !/^https:\/\/wa\.me\//.test(b.url) && (
+                <input className="input" value={b.url} onChange={(e) => set((d) => (d.buttons[i].url = e.target.value))} />
+              )}
             </div>
+            {b.url !== undefined && /^https:\/\/wa\.me\//.test(b.url) && <WhatsAppButton url={b.url} onChange={(url) => set((d) => (d.buttons[i].url = url))} />}
           </div>
         ))}
       {mode === 'buttons' && node.data.buttons!.length < 3 && (
@@ -418,6 +423,7 @@ const ACTION_TYPES: [string, string][] = [
   ['set_field', 'Preencher campo'],
   ['set_var', 'Definir variável'],
   ['human_handoff', 'Passar para atendente (pausa o robô)'],
+  ['create_order', 'Registrar pedido (vai para Pedidos)'],
   ['webhook', 'Chamar webhook (n8n, sistema, Pix…)'],
 ];
 
@@ -438,6 +444,7 @@ function ActionForm({ node, set }: { node: Extract<FlowNode, { type: 'action' }>
                     : t === 'set_field' ? { type: t, field: '', value: '' }
                     : t === 'set_var' ? { type: t, var: '', value: '' }
                     : t === 'webhook' ? { type: t, url: 'https://', method: 'POST' }
+                    : t === 'create_order' ? { type: t, summary: '{{field.pedido}}', fields: ['nome', 'endereco', 'telefone', 'pagamento'], total: '' }
                     : { type: t };
                 })
               }
@@ -458,6 +465,42 @@ function ActionForm({ node, set }: { node: Extract<FlowNode, { type: 'action' }>
           {'field' in a && <input className="input mono" placeholder="campo" value={a.field} onChange={(e) => set((d) => (d.actions[i].field = e.target.value))} />}
           {'var' in a && <input className="input mono" placeholder="variável" value={a.var} onChange={(e) => set((d) => (d.actions[i].var = e.target.value))} />}
           {'value' in a && <input className="input" placeholder="valor (aceita {{variáveis}})" value={a.value} onChange={(e) => set((d) => (d.actions[i].value = e.target.value))} />}
+          {a.type === 'create_order' && (
+            <>
+              <label className="label" style={{ marginBottom: 0 }}>
+                Resumo do pedido
+              </label>
+              <textarea
+                className="input textarea"
+                rows={2}
+                value={a.summary}
+                onChange={(e) => set((d) => (d.actions[i].summary = e.target.value))}
+                placeholder="ex.: {{field.pedido}}"
+              />
+              <label className="label" style={{ marginBottom: 0 }}>
+                Campos que vão junto (separados por vírgula)
+              </label>
+              <input
+                className="input mono"
+                value={a.fields.join(', ')}
+                onChange={(e) => set((d) => (d.actions[i].fields = e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean)))}
+                placeholder="nome, endereco, telefone, pagamento"
+              />
+              <label className="label" style={{ marginBottom: 0 }}>
+                Valor total (opcional)
+              </label>
+              <input
+                className="input"
+                value={a.total ?? ''}
+                onChange={(e) => set((d) => (d.actions[i].total = e.target.value || undefined))}
+                placeholder="ex.: 49,90 ou {{field.total}}"
+              />
+              <span className="hint">
+                O pedido aparece na página <b>Pedidos</b> do painel, com som de aviso. O número dele fica em <span className="mono">{'{{var.order_number}}'}</span> para usar
+                na mensagem seguinte.
+              </span>
+            </>
+          )}
           {a.type === 'webhook' && (
             <>
               <div className="row">
@@ -485,5 +528,37 @@ function ActionForm({ node, set }: { node: Extract<FlowNode, { type: 'action' }>
         <Icon name="plus" /> Ação
       </button>
     </>
+  );
+}
+
+/** Botão "Abre WhatsApp": número do negócio (Configurações) ou outro, e a mensagem já preenchida. */
+function WhatsAppButton({ url, onChange }: { url: string; onChange: (url: string) => void }) {
+  const m = /^https:\/\/wa\.me\/([^?]*)\??(?:text=(.*))?$/s.exec(url);
+  const phone = m?.[1] ?? '{{whatsapp}}';
+  let text = m?.[2] ?? '';
+  try {
+    text = decodeURIComponent(text);
+  } catch {
+    /* já está cru */
+  }
+  const build = (p: string, t: string) => `https://wa.me/${p}${t ? `?text=${t}` : ''}`;
+  const useBusiness = phone === '{{whatsapp}}';
+  return (
+    <div className="stack-sm">
+      <label className="checkbox small">
+        <input type="checkbox" checked={useBusiness} onChange={(e) => onChange(build(e.target.checked ? '{{whatsapp}}' : '', text))} />
+        Usar o WhatsApp do negócio (Configurações)
+      </label>
+      {!useBusiness && (
+        <input className="input mono" placeholder="5531999999999" value={phone} onChange={(e) => onChange(build(e.target.value.replace(/\D/g, ''), text))} />
+      )}
+      <textarea
+        className="input textarea"
+        rows={2}
+        value={text}
+        onChange={(e) => onChange(build(phone, e.target.value))}
+        placeholder="Mensagem que já vai escrita (aceita {{field.nome}}, {{var.order_number}}…)"
+      />
+    </div>
   );
 }

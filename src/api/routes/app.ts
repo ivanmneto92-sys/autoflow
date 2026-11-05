@@ -15,6 +15,7 @@ import { signState } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
 import { PgStore } from '../../store/pg.js';
 import { HttpError } from '../http.js';
+import { orderRoutes } from './orders.js';
 import { postRoutes } from './posts.js';
 import { simulatorRoutes } from './simulator.js';
 
@@ -119,6 +120,7 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
 
   await simulatorRoutes(app, wsOf);
   await postRoutes(app, wsOf);
+  await orderRoutes(app, wsOf);
 
   // ───────────── Usuário e workspaces ─────────────
   app.get('/app/me', async (req) => {
@@ -154,6 +156,12 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
             timezone: z.string().optional(),
             bot_pause_hours: z.number().min(0).max(168).optional(),
             business_hours: z.record(z.array(z.tuple([z.string(), z.string()]))).optional(),
+            // WhatsApp do negócio (só números, com DDI): usado nos botões "Continuar no WhatsApp"
+            whatsapp: z
+              .string()
+              .regex(/^\d{10,15}$/, 'WhatsApp: só números com DDI e DDD (ex.: 5531999999999)')
+              .or(z.literal(''))
+              .optional(),
           })
           .optional(),
       })

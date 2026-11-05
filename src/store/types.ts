@@ -2,6 +2,8 @@ import type { FlowGraph } from '../flow/schema.js';
 import type { BusinessHours } from '../lib/businessHours.js';
 
 export interface WorkspaceSettings {
+  /** WhatsApp do negócio (só números com DDI) — usado em {{whatsapp}} nos links */
+  whatsapp?: string;
   timezone?: string;
   business_hours?: BusinessHours;
   bot_pause_hours?: number;
@@ -93,6 +95,16 @@ export interface MessageLog {
   sessionId?: string | null;
 }
 
+export interface OrderInput {
+  workspaceId: string;
+  contactId: string;
+  igAccountId: string;
+  flowId: string | null;
+  summary: string;
+  details: { label: string; value: string }[];
+  totalCents: number | null;
+}
+
 export interface EventLog {
   workspaceId: string;
   contactId?: string | null;
@@ -141,4 +153,6 @@ export interface Store {
   messageExists(mid: string): Promise<boolean>;
   logMessage(m: MessageLog): Promise<void>;
   logEvent(e: EventLog): Promise<void>;
+  /** Cria um pedido com número sequencial por negócio. */
+  createOrder(o: OrderInput): Promise<{ id: string; number: number }>;
 }

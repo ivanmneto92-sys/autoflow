@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FlowGraph } from '../flow/schema.js';
 import type {
+  OrderInput,
   Account,
   Contact,
   EventLog,
@@ -144,6 +145,14 @@ export class MemoryStore implements Store {
   }
   async logEvent(e: EventLog) {
     this.events.push(e);
+  }
+
+  orders: (OrderInput & { id: string; number: number })[] = [];
+  async createOrder(o: OrderInput) {
+    const number = this.orders.filter((x) => x.workspaceId === o.workspaceId).length + 1;
+    const order = { ...o, id: `order-${number}`, number };
+    this.orders.push(order);
+    return { id: order.id, number };
   }
 
   // Helpers de teste

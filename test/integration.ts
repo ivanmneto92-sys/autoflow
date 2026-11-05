@@ -53,11 +53,17 @@ if (sess!.status === 'waiting_input') {
   await engine.handleEvent({ kind: 'dm', igUserId: IG, senderId: 'u-int', mid: `d1${Date.now()}`, text: 'Ivan', timestamp: Date.now() });
   await engine.handleEvent({ kind: 'dm', igUserId: IG, senderId: 'u-int', mid: `d2${Date.now()}`, text: 'Rua X, 10', timestamp: Date.now() });
   await engine.handleEvent({ kind: 'dm', igUserId: IG, senderId: 'u-int', mid: `d3${Date.now()}`, text: '31988887777', timestamp: Date.now() });
+  await engine.handleEvent({ kind: 'dm', igUserId: IG, senderId: 'u-int', mid: `d4${Date.now()}`, text: '2 pizzas', timestamp: Date.now() });
+  await engine.handleEvent({ kind: 'dm', igUserId: IG, senderId: 'u-int', mid: `d5${Date.now()}`, text: 'Pix', timestamp: Date.now() });
   const [f] = await sql`select values from autoflow.contact_fields where contact_id = ${contact!.id}`;
-  assert.deepEqual(f!.values, { nome: 'Ivan', endereco: 'Rua X, 10', telefone: '31988887777' });
+  assert.deepEqual(f!.values, { nome: 'Ivan', endereco: 'Rua X, 10', telefone: '31988887777', pedido: '2 pizzas', pagamento: 'Pix' });
   const tags = await sql`select t.name from autoflow.contact_tags ct join autoflow.tags t on t.id = ct.tag_id where ct.contact_id = ${contact!.id}`;
-  assert.ok(tags.some((t) => t.name === 'pedido-iniciado'));
-  console.log('  ✓ fluxo de pedido completo no Postgres');
+  assert.ok(tags.some((t) => t.name === 'pedido-feito'));
+  const [order] = await sql`select number, summary, details, status from autoflow.orders where contact_id = ${contact!.id}`;
+  assert.equal(order?.summary, '2 pizzas');
+  assert.equal(order?.status, 'new');
+  assert.equal((order?.details as { label: string }[]).length, 4);
+  console.log(`  ✓ fluxo de pedido completo no Postgres (pedido #${order!.number})`);
 } else {
   console.log('  (fora do horário do seed — fluxo respondeu "fechado")');
 }

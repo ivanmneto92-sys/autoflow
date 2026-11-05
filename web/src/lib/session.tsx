@@ -8,6 +8,7 @@ export interface Workspace {
   name: string;
   role: string;
   settings: {
+    whatsapp?: string;
     timezone?: string;
     bot_pause_hours?: number;
     business_hours?: Record<string, [string, string][]>;

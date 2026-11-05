@@ -21,6 +21,7 @@ export function Settings() {
   const [name, setName] = useState(workspace?.name ?? '');
   const [pause, setPause] = useState(workspace?.settings.bot_pause_hours ?? 12);
   const [hours, setHours] = useState<Hours>(workspace?.settings.business_hours ?? {});
+  const [whatsapp, setWhatsapp] = useState(workspace?.settings.whatsapp ?? '');
   const [busy, setBusy] = useState(false);
 
   const setDay = (day: string, open: boolean) =>
@@ -40,7 +41,7 @@ export function Settings() {
   async function save() {
     setBusy(true);
     try {
-      await api('/app/workspace', { method: 'PATCH', body: { name, settings: { bot_pause_hours: Number(pause), business_hours: hours } } });
+      await api('/app/workspace', { method: 'PATCH', body: { name, settings: { bot_pause_hours: Number(pause), business_hours: hours, whatsapp } } });
       await refresh();
       toast('Configurações salvas');
     } catch (e) {
@@ -65,6 +66,17 @@ export function Settings() {
         <div className="field">
           <label className="label">Nome do negócio</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="label">WhatsApp do negócio</label>
+          <input
+            className="input mono"
+            value={whatsapp}
+            onChange={(e) => setWhatsapp(e.target.value.replace(/\D/g, ''))}
+            placeholder="5531999999999"
+            style={{ maxWidth: 220 }}
+          />
+          <span className="hint">Com DDI 55 e DDD, só números. É para onde vão os botões “Abre WhatsApp” dos fluxos.</span>
         </div>
         <div className="field">
           <label className="label">Pausar o robô depois que um atendente responde (horas)</label>

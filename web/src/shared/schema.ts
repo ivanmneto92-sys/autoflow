@@ -45,6 +45,13 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('set_field'), field: z.string(), value: z.string() }),
   z.object({ type: z.literal('set_var'), var: z.string(), value: z.string() }),
   z.object({ type: z.literal('human_handoff'), notify_text: z.string().optional() }),
+  // Registra um pedido (aparece na página Pedidos do painel). O número fica em {{var.order_number}}
+  z.object({
+    type: z.literal('create_order'),
+    summary: z.string().max(1000).default(''), // aceita {{variáveis}}
+    fields: z.array(z.string()).default([]), // campos do contato anexados ao pedido (ex.: nome, endereco)
+    total: z.string().max(100).optional(), // valor: número ou {{field.total}}
+  }),
   z.object({
     type: z.literal('webhook'),
     url: z.string().url(),

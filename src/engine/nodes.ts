@@ -27,15 +27,45 @@ async function render(ctx: RunContext, text: string): Promise<string> {
   });
 }
 
-function toButtons(
+/**
+ * Links com variáveis. Em links de WhatsApp (…?text=) a mensagem inteira é montada e codificada;
+ * nos demais, só os valores das variáveis são codificados.
+ */
+export async function renderUrl(ctx: RunContext, url: string): Promise<string> {
+  url = url.replace(/\{\{\s*whatsapp\s*\}\}/g, ctx.account.settings.whatsapp ?? '');
+  if (!url.includes('{{') && !/\s/.test(url)) return url;
+  const m = /^(https?:\/\/(?:wa\.me|api\.whatsapp\.com)\/[^?]*\?(?:[^#]*&)?text=)(.*)$/is.exec(url);
+  if (m) {
+    let text = m[2]!;
+    try {
+      text = decodeURIComponent(text);
+    } catch {
+      /* texto já cru */
+    }
+    return m[1] + encodeURIComponent(await render(ctx, text));
+  }
+  const fields = await ctx.deps.store.getFields(ctx.contact.id);
+  return url.replace(/\{\{[^}]+\}\}/g, (token) =>
+    encodeURIComponent(
+      renderTemplate(token, {
+        contact: { first_name: ctx.contact.firstName, name: ctx.contact.name, username: ctx.contact.username },
+        fields,
+        vars: ctx.session.vars,
+      }),
+    ),
+  );
+}
+
+async function toButtons(
   ctx: RunContext,
   nodeId: string,
   buttons: { label: string; next?: string | null; url?: string }[],
   card?: number,
-): Button[] {
+): Promise<Button[]> {
+  const urls = await Promise.all(buttons.map((b) => (b.url ? renderUrl(ctx, b.url) : Promise.resolve(undefined))));
   return buttons.map((b, i) =>
     b.url
-      ? { type: 'web_url', title: b.label, url: b.url }
+      ? { type: 'web_url', title: b.label, url: urls[i]! }
       : {
           type: 'postback',
           title: b.label,
@@ -52,7 +82,7 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
     case 'message': {
       const text = await render(ctx, node.data.text);
       if (node.data.buttons?.length) {
-        await ctx.send({ kind: 'buttons', text, buttons: toButtons(ctx, nodeId, node.data.buttons) }, nodeId);
+        await ctx.send({ kind: 'buttons', text, buttons: await toButtons(ctx, nodeId, node.data.buttons) }, nodeId);
       } else if (node.data.quick_replies?.length) {
         await ctx.send(
           {
@@ -83,7 +113,7 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
           subtitle: c.subtitle ? await render(ctx, c.subtitle) : undefined,
           image_url: c.image_url,
           default_url: c.url,
-          buttons: c.buttons?.length ? toButtons(ctx, nodeId, c.buttons, ci) : undefined,
+          buttons: c.buttons?.length ? await toButtons(ctx, nodeId, c.buttons, ci) : undefined,
         })),
       );
       await ctx.send({ kind: 'carousel', cards }, nodeId);
@@ -185,6 +215,33 @@ async function runAction(ctx: RunContext, nodeId: string, a: FlowAction): Promis
     case 'set_var':
       ctx.session.vars[a.var] = await render(ctx, a.value);
       return;
+    case 'create_order': {
+      const fields = await store.getFields(ctx.contact.id);
+      const details = a.fields
+        .map((f) => ({ label: f, value: fields[f] === undefined || fields[f] === null ? '' : String(fields[f]) }))
+        .filter((d) => d.value);
+      const order = await store.createOrder({
+        workspaceId: ws,
+        contactId: ctx.contact.id,
+        igAccountId: ctx.account.id,
+        flowId: ctx.session.flowId,
+        summary: await render(ctx, a.summary),
+        details,
+        totalCents: a.total ? parseMoney(await render(ctx, a.total)) : null,
+      });
+      ctx.session.vars.order_number = order.number;
+      ctx.session.vars.order_id = order.id;
+      await store.logEvent({
+        workspaceId: ws,
+        contactId: ctx.contact.id,
+        flowId: ctx.session.flowId,
+        sessionId: ctx.session.id,
+        nodeId,
+        type: 'order_created',
+        data: { order_id: order.id, number: order.number },
+      });
+      return;
+    }
     case 'human_handoff': {
       const hours = ctx.account.settings.bot_pause_hours ?? 12;
       const until = new Date(ctx.now().getTime() + hours * 3_600_000);
@@ -249,4 +306,15 @@ async function runAction(ctx: RunContext, nodeId: string, a: FlowAction): Promis
       return;
     }
   }
+}
+
+/** "R$ 1.234,56" | "49,90" | "49.90" | "50" → centavos (null se não der para ler). */
+export function parseMoney(v: string): number | null {
+  const s = v.replace(/[^\d.,-]/g, '');
+  if (!s) return null;
+  let n: number;
+  if (s.includes(',')) n = Number(s.replace(/\./g, '').replace(',', '.'));
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) n = Number(s.replace(/\./g, ''));
+  else n = Number(s);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
 }

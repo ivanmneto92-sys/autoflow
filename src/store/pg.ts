@@ -3,6 +3,7 @@ import type postgres from 'postgres';
 import { config } from '../config.js';
 import { decrypt } from '../lib/crypto.js';
 import type {
+  OrderInput,
   Account,
   Contact,
   EventLog,
@@ -262,6 +263,23 @@ export class PgStore implements Store {
       values (${m.workspaceId}, ${m.contactId}, ${m.direction}, ${m.source}, ${m.mid ?? null}, ${m.text ?? null},
               ${m.payload === undefined ? null : this.sql.json(m.payload as any)}, ${m.sessionId ?? null})
       on conflict do nothing`;
+  }
+
+  async createOrder(o: OrderInput) {
+    // Número sequencial por negócio; se duas inserções colidirem, tenta de novo
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const [r] = await this.sql`
+          insert into autoflow.orders (workspace_id, number, contact_id, ig_account_id, flow_id, summary, details, total_cents)
+          select ${o.workspaceId}, coalesce(max(number), 0) + 1, ${o.contactId}, ${o.igAccountId}, ${o.flowId},
+                 ${o.summary}, ${this.sql.json(o.details)}, ${o.totalCents}
+          from autoflow.orders where workspace_id = ${o.workspaceId}
+          returning id, number`;
+        return { id: r!.id as string, number: r!.number as number };
+      } catch (err) {
+        if ((err as { code?: string }).code !== '23505' || attempt >= 4) throw err;
+      }
+    }
   }
 
   async logEvent(e: EventLog) {
