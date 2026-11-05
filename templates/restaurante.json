@@ -1,0 +1,119 @@
+{
+  "name": "Restaurante — Atendimento e Pedido",
+  "description": "Boas-vindas com botões, cardápio, checagem de horário, coleta de dados do pedido e passagem para atendente.",
+  "flow": {
+    "start": "boas_vindas",
+    "nodes": {
+      "boas_vindas": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 👋 Que bom te ver por aqui. Como posso te ajudar?",
+          "buttons": [
+            { "label": "Ver cardápio", "next": "cardapio" },
+            { "label": "Fazer pedido", "next": "checa_horario" },
+            { "label": "Falar com atendente", "next": "atendente" }
+          ]
+        }
+      },
+      "cardapio": {
+        "type": "message",
+        "data": {
+          "text": "Aqui está o nosso cardápio completo 🍕🍔",
+          "buttons": [
+            { "label": "Abrir cardápio", "url": "https://exemplo.com.br/cardapio" },
+            { "label": "Fazer pedido", "next": "checa_horario" }
+          ]
+        },
+        "next": null
+      },
+      "checa_horario": {
+        "type": "condition",
+        "data": {
+          "rules": [{ "when": { "type": "business_hours" }, "next": "pede_nome" }],
+          "else": "fechado"
+        }
+      },
+      "fechado": {
+        "type": "message",
+        "data": {
+          "text": "Poxa, estamos fechados agora 😕 Nosso horário é de terça a domingo, das 18h às 23h. Te esperamos!"
+        },
+        "next": null
+      },
+      "pede_nome": {
+        "type": "ask",
+        "data": { "text": "Bora! Qual é o seu nome?", "save_to": "nome", "validate": "text", "timeout_minutes": 30, "on_timeout": "desistiu" },
+        "next": "pede_endereco"
+      },
+      "pede_endereco": {
+        "type": "ask",
+        "data": {
+          "text": "Prazer, {{field.nome}}! Qual o endereço de entrega? (rua, número e bairro)",
+          "save_to": "endereco",
+          "validate": "text",
+          "timeout_minutes": 30,
+          "on_timeout": "desistiu"
+        },
+        "next": "pede_telefone"
+      },
+      "pede_telefone": {
+        "type": "ask",
+        "data": {
+          "text": "E um telefone com DDD para contato?",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "on_invalid": "registra_pedido",
+          "timeout_minutes": 30,
+          "on_timeout": "desistiu"
+        },
+        "next": "registra_pedido"
+      },
+      "registra_pedido": {
+        "type": "action",
+        "data": { "actions": [{ "type": "add_tag", "tag": "pedido-iniciado" }] },
+        "next": "confirma"
+      },
+      "confirma": {
+        "type": "message",
+        "data": {
+          "text": "Perfeito, {{field.nome}}! 🙌 Anotei:\n📍 {{field.endereco}}\n📞 {{field.telefone|não informado}}\n\nAgora é só me dizer o que vai querer que um atendente confirma o pedido e o valor."
+        },
+        "next": "passa_humano"
+      },
+      "atendente": {
+        "type": "message",
+        "data": { "text": "Beleza! Um atendente vai te responder aqui em instantes 😉" },
+        "next": "passa_humano"
+      },
+      "passa_humano": {
+        "type": "action",
+        "data": { "actions": [{ "type": "add_tag", "tag": "atendimento-humano" }, { "type": "human_handoff" }] },
+        "next": null
+      },
+      "desistiu": {
+        "type": "message",
+        "data": {
+          "text": "Vi que você parou por aqui. Quando quiser continuar, é só mandar \"pedido\" 😉"
+        },
+        "next": null
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": ["cardapio", "menu", "quero", "eu quero"],
+        "match": "contains",
+        "public_replies": ["Te chamei no direct! 📩", "Corre no direct que te mandei 😉", "Enviado no seu direct! 🍕"],
+        "once_per_contact": false
+      }
+    },
+    { "type": "dm_keyword", "priority": 10, "config": { "keywords": ["cardapio", "menu", "pedido", "pedir", "oi", "ola"], "match": "contains" } },
+    { "type": "story_mention", "priority": 0, "config": {} },
+    { "type": "default_reply", "priority": 0, "config": { "cooldown_minutes": 120 } }
+  ]
+}
