@@ -6,11 +6,18 @@ import { z } from 'zod';
 const nodeId = z.string().min(1).max(64);
 const next = nodeId.nullable().optional();
 
+/** Link http(s) com domínio de verdade (pega erros como "https://https://site.com"). */
+const httpUrl = z
+  .string()
+  .trim()
+  .url('Link inválido')
+  .refine((u) => /^https?:\/\/[^\s/:]+\.[^\s/]+/i.test(u), 'Link inválido: confira se não ficou "https://" repetido e se tem o domínio (ex.: https://site.com)');
+
 export const ButtonSchema = z
   .object({
     label: z.string().min(1).max(20),
     next, // botão que continua o fluxo
-    url: z.string().url().optional(), // OU botão de link
+    url: httpUrl.optional(), // OU botão de link
   })
   .refine((b) => !(b.next && b.url), 'Botão não pode ter next e url ao mesmo tempo');
 
@@ -54,7 +61,7 @@ export const NodeSchema = z.discriminatedUnion('type', [
     }),
     next,
   }),
-  z.object({ type: z.literal('image'), data: z.object({ url: z.string().url() }), next }),
+  z.object({ type: z.literal('image'), data: z.object({ url: httpUrl }), next }),
   z.object({
     type: z.literal('carousel'),
     data: z.object({
@@ -63,8 +70,8 @@ export const NodeSchema = z.discriminatedUnion('type', [
           z.object({
             title: z.string().min(1).max(80),
             subtitle: z.string().max(80).optional(),
-            image_url: z.string().url().optional(),
-            url: z.string().url().optional(),
+            image_url: httpUrl.optional(),
+            url: httpUrl.optional(),
             buttons: z.array(ButtonSchema).max(3).optional(),
           }),
         )
