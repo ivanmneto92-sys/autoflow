@@ -74,6 +74,9 @@ export async function simulatorRoutes(app: FastifyInstance, wsOf: (req: FastifyR
         z.object({ type: z.literal('quick_reply'), payload: z.string().min(1), title: z.string().default('') }),
         z.object({ type: z.literal('comment'), text: z.string().min(1).max(1000), media_id: z.string().optional() }),
         z.object({ type: z.literal('story_mention') }),
+        z.object({ type: z.literal('story_reply'), text: z.string().min(1).max(1000) }),
+        z.object({ type: z.literal('ref'), ref: z.string().trim().min(1).max(60) }),
+        z.object({ type: z.literal('ad'), text: z.string().min(1).max(1000), ad_id: z.string().optional() }),
       ])
       .parse(req.body);
 
@@ -106,6 +109,15 @@ export async function simulatorRoutes(app: FastifyInstance, wsOf: (req: FastifyR
         break;
       case 'story_mention':
         event = { kind: 'story_mention', igUserId, senderId: igsid, mid, url: undefined, timestamp: ts };
+        break;
+      case 'story_reply':
+        event = { kind: 'dm', igUserId, senderId: igsid, mid, text: body.text, storyReply: { id: 'sim_story' }, timestamp: ts };
+        break;
+      case 'ref':
+        event = { kind: 'referral', igUserId, senderId: igsid, mid, referral: { ref: body.ref, source: 'IGME_SOURCE_LINK' }, timestamp: ts };
+        break;
+      case 'ad':
+        event = { kind: 'dm', igUserId, senderId: igsid, mid, text: body.text, referral: { source: 'ADS', adId: body.ad_id || undefined }, timestamp: ts };
         break;
     }
 

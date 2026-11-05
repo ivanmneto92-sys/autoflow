@@ -32,13 +32,19 @@ type SendBody =
   | { type: 'click'; payload: string; title: string }
   | { type: 'quick_reply'; payload: string; title: string }
   | { type: 'comment'; text: string; media_id?: string }
-  | { type: 'story_mention' };
+  | { type: 'story_mention' }
+  | { type: 'story_reply'; text: string }
+  | { type: 'ref'; ref: string }
+  | { type: 'ad'; text: string; ad_id?: string };
 
 export function Simulator() {
   const toast = useToast();
   const [st, setSt] = useState<SimState | null>(null);
   const [text, setText] = useState('');
   const [comment, setComment] = useState('');
+  const [storyText, setStoryText] = useState('');
+  const [ref, setRef] = useState('');
+  const [adText, setAdText] = useState('');
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -205,6 +211,35 @@ export function Simulator() {
             <button className="btn" disabled={busy} onClick={() => send({ type: 'story_mention' })}>
               📸 Marcar o perfil num story
             </button>
+            <SimField
+              label="Responder um story"
+              placeholder="ex.: quero!"
+              value={storyText}
+              onChange={setStoryText}
+              button="Responder"
+              disabled={busy}
+              onSend={() => (send({ type: 'story_reply', text: storyText }), setStoryText(''))}
+            />
+            <SimField
+              label="Abrir link ig.me com ref"
+              placeholder="ex.: cardapio"
+              value={ref}
+              onChange={setRef}
+              button="Abrir"
+              disabled={busy}
+              onSend={() => (send({ type: 'ref', ref }), setRef(''))}
+              hint="Dispara gatilhos de “Link do Direct”."
+            />
+            <SimField
+              label="Mensagem vinda de anúncio"
+              placeholder="ex.: Olá, vi o anúncio"
+              value={adText}
+              onChange={setAdText}
+              button="Enviar"
+              disabled={busy}
+              onSend={() => (send({ type: 'ad', text: adText }), setAdText(''))}
+              hint="Dispara gatilhos de “Clique em anúncio” (qualquer anúncio)."
+            />
           </div>
 
           <div className="alert alert-info small">
@@ -225,6 +260,9 @@ function Bubble({ m, onSend, disabled }: { m: Msg; onSend: (b: SendBody) => void
     else if (p.postback) text = `🔘 ${m.text || 'Clicou num botão'}`;
     else if (p.quick_reply) text = `⚡ ${m.text}`;
     else if (p.story_mention !== undefined) text = '📸 Marcou você num story';
+    else if (p.referral && !m.text) text = `🔗 Abriu o link ig.me${p.referral.ref ? ` (ref: ${p.referral.ref})` : ''}`;
+    else if (p.referral?.source === 'ADS') text = `📣 Veio do anúncio: ${m.text}`;
+    else if (p.story_reply) text = `↩️ Respondeu ao story: ${m.text}`;
     return <div className="bubble out sim-me">{text || '…'}</div>;
   }
 
@@ -282,5 +320,29 @@ function SimButton({ b, onSend, disabled }: { b: any; onSend: (b: SendBody) => v
     <button className="sim-btn" disabled={disabled} onClick={() => onSend({ type: 'click', payload: b.payload, title: b.title })}>
       {b.title}
     </button>
+  );
+}
+
+function SimField(props: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  button: string;
+  disabled: boolean;
+  onSend: () => void;
+  hint?: string;
+}) {
+  return (
+    <div className="field">
+      <label className="label">{props.label}</label>
+      <div className="row">
+        <input className="input" placeholder={props.placeholder} value={props.value} onChange={(e) => props.onChange(e.target.value)} />
+        <button className="btn" disabled={props.disabled || !props.value.trim()} onClick={props.onSend}>
+          {props.button}
+        </button>
+      </div>
+      {props.hint && <span className="hint">{props.hint}</span>}
+    </div>
   );
 }

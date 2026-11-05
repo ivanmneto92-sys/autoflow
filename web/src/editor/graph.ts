@@ -208,7 +208,7 @@ export function autoLayout(graph: FlowGraph): Record<string, { x: number; y: num
     const d = depth[id]!;
     const r = rows[d] ?? 0;
     rows[d] = r + 1;
-    pos[id] = { x: 220 + d * 340, y: 40 + r * 260 };
+    pos[id] = { x: 360 + d * 340, y: 40 + r * 260 };
   }
   pos[START_ID] = { x: 20, y: 60 };
   return pos;
@@ -219,9 +219,12 @@ export function toCanvas(
   opts: { selected: string | null; errors: Set<string>; stats?: Record<string, number> },
 ): { nodes: Node[]; edges: Edge[] } {
   const layout = { ...autoLayout(graph), ...(graph.layout ?? {}) };
-  const nodes: Node[] = [
-    { id: START_ID, type: 'start', position: layout[START_ID] ?? { x: 20, y: 60 }, data: {}, deletable: false, selectable: false },
-  ];
+  // O nó "Quando…" é largo: se estiver em cima do primeiro nó (fluxos antigos), afasta para a esquerda
+  let startPos = layout[START_ID] ?? { x: 20, y: 60 };
+  const first = layout[graph.start];
+  if (first && startPos.x > first.x - 300 && startPos.x < first.x + 260 && Math.abs(startPos.y - first.y) < 220)
+    startPos = { x: first.x - 330, y: first.y };
+  const nodes: Node[] = [{ id: START_ID, type: 'start', position: startPos, data: {}, deletable: false, selectable: false }];
   const edges: Edge[] = [];
   if (graph.nodes[graph.start]) {
     edges.push({ id: `${START_ID}:start`, source: START_ID, sourceHandle: 'start', target: graph.start, animated: true, deletable: false });

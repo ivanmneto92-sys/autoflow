@@ -4,46 +4,9 @@ import { Empty, ErrorBox, Icon, Loading, Modal, useLoad, useToast } from '../com
 import { api, formatDateTime } from '../lib/api';
 import { describeAutomation, isEditable, POST_STATUS, postDate, postTitle, type Post } from '../lib/posts';
 import { useSession } from '../lib/session';
+import { describeTrigger, MATCH, triggerDefaults, TYPES, type TType, type Trigger } from '../lib/triggers';
 
-type TType = 'comment' | 'dm_keyword' | 'story_mention' | 'postback' | 'default_reply';
-
-interface Trigger {
-  id: string;
-  flow_id: string;
-  flow_name: string;
-  flow_status: string;
-  ig_account_id: string | null;
-  type: TType;
-  config: any;
-  priority: number;
-  enabled: boolean;
-}
-
-const TYPES: Record<TType, { label: string; desc: string; icon: string }> = {
-  dm_keyword: { label: 'Palavra-chave na DM', desc: 'Quando o cliente manda uma mensagem com certas palavras.', icon: '💬' },
-  comment: { label: 'Comentário em post', desc: 'Quando alguém comenta — responde em público e chama no direct.', icon: '🗨' },
-  story_mention: { label: 'Menção em story', desc: 'Quando alguém marca a conta num story.', icon: '📸' },
-  default_reply: { label: 'Resposta padrão', desc: 'Quando nenhuma outra regra entendeu a mensagem.', icon: '🤖' },
-  postback: { label: 'Botão do menu / ice breaker', desc: 'Payload personalizado de botões do perfil.', icon: '🔘' },
-};
-
-const MATCH: Record<string, string> = { contains: 'contém', exact: 'é exatamente', starts_with: 'começa com' };
-
-function describe(t: Trigger): string {
-  const c = t.config;
-  switch (t.type) {
-    case 'dm_keyword':
-      return `Mensagem ${MATCH[c.match] ?? 'contém'}: ${c.keywords.join(', ')}`;
-    case 'comment':
-      return `${c.media_id ? 'Num post específico' : 'Em qualquer post'}${c.keywords?.length ? ` · comentário ${MATCH[c.match] ?? 'contém'}: ${c.keywords.join(', ')}` : ' · qualquer comentário'}${c.once_per_contact ? ' · 1 vez por pessoa' : ''}`;
-    case 'default_reply':
-      return `No máximo 1 vez a cada ${c.cooldown_minutes} min por pessoa`;
-    case 'postback':
-      return `Payload: ${c.payload}`;
-    default:
-      return '';
-  }
-}
+const describe = describeTrigger;
 
 export function Triggers() {
   const { workspace } = useSession();
@@ -201,7 +164,20 @@ function pick(t: Partial<Trigger>) {
   return { flow_id: t.flow_id, ig_account_id: t.ig_account_id ?? null, type: t.type, config: t.config, priority: t.priority ?? 0, enabled: t.enabled ?? true };
 }
 
-function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<Trigger>; flows: { id: string; name: string }[]; onClose: () => void; onSaved: (msg?: string) => void }) {
+export function TriggerModal({
+  initial,
+  flows,
+  onClose,
+  onSaved,
+  fixedFlow,
+}: {
+  initial: Partial<Trigger>;
+  flows: { id: string; name: string }[];
+  onClose: () => void;
+  onSaved: (msg?: string) => void;
+  /** Aberto de dentro do editor do fluxo: não deixa trocar o fluxo */
+  fixedFlow?: boolean;
+}) {
   const [t, setT] = useState<Partial<Trigger>>({ ...initial, flow_id: initial.flow_id ?? flows[0]?.id });
   const [kw, setKw] = useState('');
   const [busy, setBusy] = useState(false);
@@ -212,15 +188,12 @@ function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<T
   const c = t.config ?? {};
   const setC = (patch: any) => setT({ ...t, config: { ...c, ...patch } });
 
+  const accounts = useLoad(() => api<{ id: string; username: string; status: string }[]>('/app/accounts'), []);
+  const username = accounts.data?.find((a) => a.status === 'active')?.username ?? 'suaconta';
+  const toast = useToast();
+
   function setType(type: TType) {
-    const defaults: Record<TType, any> = {
-      dm_keyword: { keywords: [], match: 'contains' },
-      comment: { media_id: null, keywords: [], match: 'contains', public_replies: ['Te chamei no direct! 📩'], once_per_contact: false },
-      story_mention: {},
-      default_reply: { cooldown_minutes: 120 },
-      postback: { payload: '' },
-    };
-    setT({ ...t, type, config: defaults[type] });
+    setT({ ...t, type, config: triggerDefaults(type) });
   }
 
   function addKeyword() {
@@ -270,6 +243,23 @@ function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<T
       wide
       footer={
         <>
+          {t.id && (
+            <button
+              className="btn btn-danger btn-ghost"
+              style={{ marginRight: 'auto' }}
+              onClick={async () => {
+                if (!confirm('Excluir este gatilho?')) return;
+                try {
+                  await api(`/app/triggers/${t.id}`, { method: 'DELETE' });
+                  onSaved('Gatilho excluído');
+                } catch (e) {
+                  setError((e as Error).message);
+                }
+              }}
+            >
+              <Icon name="trash" /> Excluir
+            </button>
+          )}
           <button className="btn" onClick={onClose}>
             Cancelar
           </button>
@@ -296,7 +286,7 @@ function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<T
           </div>
         )}
 
-        <div className="field">
+        <div className="field" style={fixedFlow ? { display: 'none' } : undefined}>
           <label className="label">Inicia o fluxo</label>
           {flows.length ? (
             <select className="select" value={t.flow_id} onChange={(e) => setT({ ...t, flow_id: e.target.value })}>
@@ -313,7 +303,36 @@ function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<T
           )}
         </div>
 
-        {(t.type === 'dm_keyword' || t.type === 'comment') && (
+        {t.type === 'ref_link' && (
+          <div className="field">
+            <label className="label">Código do link (ref)</label>
+            <input className="input mono" value={c.ref ?? ''} onChange={(e) => setC({ ref: e.target.value.replace(/[^A-Za-z0-9_-]/g, '') })} placeholder="ex.: cardapio" />
+            {c.ref ? (
+              <div className="row" style={{ marginTop: 8 }}>
+                <span className="mono small" style={{ wordBreak: 'break-all' }}>{`https://ig.me/m/${username}?ref=${c.ref}`}</span>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(`https://ig.me/m/${username}?ref=${c.ref}`).then(() => toast('Link copiado'));
+                  }}
+                >
+                  <Icon name="copy" size={15} /> Copiar
+                </button>
+              </div>
+            ) : null}
+            <span className="hint">Coloque esse link na bio, num story ou mande no WhatsApp. Quem abrir o Direct por ele entra neste fluxo. Letras, números, _ e -.</span>
+          </div>
+        )}
+
+        {t.type === 'ad_click' && (
+          <div className="field">
+            <label className="label">ID do anúncio (opcional)</label>
+            <input className="input mono" value={c.ad_id ?? ''} onChange={(e) => setC({ ad_id: e.target.value.replace(/\D/g, '') || null })} placeholder="vazio = qualquer anúncio" />
+            <span className="hint">Para anúncios com o botão “Enviar mensagem” levando ao Direct do Instagram. O ID fica no Gerenciador de Anúncios.</span>
+          </div>
+        )}
+
+        {(t.type === 'dm_keyword' || t.type === 'comment' || t.type === 'story_reply') && (
           <>
             {t.type === 'comment' && (
               <div className="field">
@@ -350,7 +369,10 @@ function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<T
               </div>
             )}
             <div className="field">
-              <label className="label">Palavras-chave {t.type === 'comment' && '(vazio = qualquer comentário)'}</label>
+              <label className="label">
+                Palavras-chave {t.type === 'comment' && '(vazio = qualquer comentário)'}
+                {t.type === 'story_reply' && '(vazio = qualquer resposta)'}
+              </label>
               <div className="row wrap" style={{ marginBottom: 6, gap: 6 }}>
                 {(c.keywords ?? []).map((k: string, i: number) => (
                   <span className="chip" key={i}>

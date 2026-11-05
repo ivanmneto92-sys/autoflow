@@ -345,7 +345,7 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
   const TriggerBody = z.object({
     flow_id: uuid,
     ig_account_id: uuid.nullable().optional(),
-    type: z.enum(['comment', 'dm_keyword', 'story_mention', 'postback', 'default_reply']),
+    type: z.enum(['comment', 'dm_keyword', 'story_mention', 'story_reply', 'ref_link', 'ad_click', 'postback', 'default_reply']),
     config: z.record(z.unknown()).default({}),
     priority: z.number().int().default(0),
     enabled: z.boolean().default(true),

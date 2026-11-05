@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import type { FlowGraph, FlowNode } from '../flow/schema.js';
 import { parsePayload } from '../flow/schema.js';
 import { IgApiError, type OutMessage, type Recipient } from '../instagram/client.js';
-import type { InboundEvent } from '../instagram/webhook.js';
+import type { InboundEvent, Referral } from '../instagram/webhook.js';
 import { matchAny, pickRandom, type MatchType } from '../lib/text.js';
 import type { Account, Contact, FlowVersion, Session, Trigger } from '../store/types.js';
 import { executeNode, type NodeResult } from './nodes.js';
@@ -146,7 +146,18 @@ export class Engine {
       source: 'user',
       mid: e.mid,
       text: text || null,
-      payload: e.kind === 'postback' ? { postback: e.payload } : e.kind === 'dm' && e.quickReplyPayload ? { quick_reply: e.quickReplyPayload } : e.kind === 'story_mention' ? { story_mention: e.url } : undefined,
+      payload:
+        e.kind === 'postback'
+          ? { postback: e.payload }
+          : e.kind === 'dm' && e.quickReplyPayload
+            ? { quick_reply: e.quickReplyPayload }
+            : e.kind === 'story_mention'
+              ? { story_mention: e.url }
+              : e.kind === 'referral'
+                ? { referral: e.referral }
+                : e.kind === 'dm' && (e.storyReply || e.referral)
+                  ? { ...(e.storyReply ? { story_reply: e.storyReply.url ?? true } : {}), ...(e.referral ? { referral: e.referral } : {}) }
+                  : undefined,
     });
 
     // Completa nome/username na primeira interação (melhor esforço)
@@ -169,6 +180,13 @@ export class Engine {
       if (await this.onPayload(account, contact, payloadStr, created, text)) return;
     }
 
+    // Veio de anúncio ou de link ig.me com ref → gatilho de entrada tem prioridade
+    const referral = e.kind === 'referral' ? e.referral : e.kind === 'dm' ? e.referral : undefined;
+    if (referral) {
+      if (await this.onReferral(account, contact, referral, created, text)) return;
+      if (e.kind === 'referral') return; // só abriu a conversa: sem gatilho, não responde
+    }
+
     const active = await store.getActiveSession(contact.id);
 
     if (e.kind === 'dm' && active) {
@@ -183,6 +201,16 @@ export class Engine {
       const [t] = await store.listTriggers(account.workspaceId, account.id, 'story_mention');
       if (t) await this.fire(account, contact, t, created, '');
       return;
+    }
+
+    if (e.kind === 'dm' && e.storyReply) {
+      const triggers = await store.listTriggers(account.workspaceId, account.id, 'story_reply');
+      for (const t of triggers) {
+        const cfg = t.config as { keywords?: string[]; match?: MatchType };
+        if (!cfg.keywords?.length || matchAny(e.text, cfg.keywords, cfg.match ?? 'contains')) {
+          return this.fire(account, contact, t, created, e.text);
+        }
+      }
     }
 
     if (e.kind === 'dm' && e.text) {
@@ -206,6 +234,30 @@ export class Engine {
         await this.fire(account, contact, def, created, text);
       }
     }
+  }
+
+  /** Entrada por link ig.me com ref ou por anúncio. Retorna true se algum gatilho disparou. */
+  private async onReferral(account: Account, contact: Contact, r: Referral, created: boolean, text: string): Promise<boolean> {
+    const { store } = this.deps;
+    if (r.ref) {
+      const ref = r.ref.trim().toLowerCase();
+      const triggers = await store.listTriggers(account.workspaceId, account.id, 'ref_link');
+      const t = triggers.find((x) => String((x.config as { ref?: string }).ref ?? '').toLowerCase() === ref);
+      if (t) {
+        await this.fire(account, contact, t, created, text);
+        return true;
+      }
+    }
+    if (r.adId || r.source === 'ADS') {
+      const triggers = await store.listTriggers(account.workspaceId, account.id, 'ad_click');
+      const adOf = (x: Trigger) => (x.config as { ad_id?: string | null }).ad_id;
+      const t = triggers.find((x) => r.adId && adOf(x) === r.adId) ?? triggers.find((x) => !adOf(x)); // anúncio específico vence "qualquer"
+      if (t) {
+        await this.fire(account, contact, t, created, text);
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Cliques em botões / respostas rápidas / ice breakers. Retorna true se tratou. */

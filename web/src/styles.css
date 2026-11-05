@@ -315,3 +315,13 @@ p { margin: 0; }
 .pick-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; font: inherit; color: var(--text); cursor: pointer; }
 .pick-row:hover { border-color: var(--primary); background: var(--primary-soft); }
 .pick-row img, .pick-row video { width: 44px; height: 55px; border-radius: 6px; object-fit: cover; background: var(--surface-2); flex: none; }
+/* ── Nó "Quando…" (gatilhos do fluxo) ── */
+.fnode-when { min-width: 240px; max-width: 280px; }
+.when-body { max-height: none; display: flex; flex-direction: column; gap: 6px; white-space: normal; }
+.when-item { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 12px; color: var(--text); cursor: pointer; }
+.when-item:hover { border-color: var(--primary); }
+.when-item.off { opacity: 0.55; }
+.when-item.pending { cursor: default; border-style: dashed; color: var(--muted); }
+.when-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.when-add { width: 100%; padding: 8px; border: 1.5px dashed var(--primary); border-radius: 8px; background: transparent; color: var(--primary-strong); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.when-add:hover { background: var(--primary-soft); }

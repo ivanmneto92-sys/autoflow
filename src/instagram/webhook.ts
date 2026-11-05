@@ -17,6 +17,19 @@ export type InboundEvent =
       text: string;
       quickReplyPayload?: string;
       attachments?: { type: string; url?: string }[];
+      /** Resposta a um story da conta */
+      storyReply?: { id?: string; url?: string };
+      /** Primeira mensagem vinda de anúncio ou link ig.me com ref */
+      referral?: Referral;
+      timestamp: number;
+    }
+  | {
+      /** Clique num link ig.me com ref numa conversa que já existe */
+      kind: 'referral';
+      igUserId: string;
+      senderId: string;
+      mid: string;
+      referral: Referral;
       timestamp: number;
     }
   | {
@@ -58,6 +71,17 @@ export type InboundEvent =
       timestamp: number;
     };
 
+export interface Referral {
+  ref?: string;
+  source?: string; // ADS, IGME_SOURCE_LINK…
+  adId?: string;
+}
+
+function toReferral(r: RawReferral | undefined): Referral | undefined {
+  if (!r || (!r.ref && !r.ad_id && !r.source)) return undefined;
+  return { ref: r.ref ?? undefined, source: r.source ?? undefined, adId: r.ad_id != null ? String(r.ad_id) : undefined };
+}
+
 export function dedupeKey(e: InboundEvent): string {
   switch (e.kind) {
     case 'comment':
@@ -67,6 +91,13 @@ export function dedupeKey(e: InboundEvent): string {
     default:
       return `${e.kind}:${e.mid}`;
   }
+}
+
+interface RawReferral {
+  ref?: string;
+  source?: string;
+  type?: string;
+  ad_id?: string | number;
 }
 
 interface RawMessaging {
@@ -81,8 +112,11 @@ interface RawMessaging {
     is_unsupported?: boolean;
     quick_reply?: { payload: string };
     attachments?: { type: string; payload?: { url?: string } }[];
+    reply_to?: { mid?: string; story?: { id?: string; url?: string } };
+    referral?: RawReferral;
   };
   postback?: { mid: string; title?: string; payload: string };
+  referral?: RawReferral;
   read?: unknown;
   reaction?: unknown;
 }
@@ -128,6 +162,8 @@ export function normalizeWebhook(body: unknown): InboundEvent[] {
           text: msg.text ?? '',
           quickReplyPayload: msg.quick_reply?.payload,
           attachments: msg.attachments?.map((a) => ({ type: a.type, url: a.payload?.url })),
+          ...(msg.reply_to?.story ? { storyReply: { id: msg.reply_to.story.id, url: msg.reply_to.story.url } } : {}),
+          ...(toReferral(msg.referral) ? { referral: toReferral(msg.referral) } : {}),
           timestamp: ts,
         });
       } else if (m.postback) {
@@ -140,6 +176,10 @@ export function normalizeWebhook(body: unknown): InboundEvent[] {
           payload: m.postback.payload,
           timestamp: ts,
         });
+      } else if (m.referral && m.sender) {
+        const referral = toReferral(m.referral);
+        if (referral)
+          out.push({ kind: 'referral', igUserId, senderId: m.sender.id, mid: `ref_${m.sender.id}_${ts}`, referral, timestamp: ts });
       }
     }
 

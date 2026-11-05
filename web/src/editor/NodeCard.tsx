@@ -1,4 +1,7 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { createContext, useContext } from 'react';
+import { describeAutomation, type Post } from '../lib/posts';
+import { describeTrigger, TYPES, type Trigger } from '../lib/triggers';
 import type { FlowNode } from '../shared/schema';
 import { NODE_META, outputsOf, summarize } from './graph';
 
@@ -43,11 +46,75 @@ export function FlowNodeCard({ data, selected }: NodeProps) {
   );
 }
 
+/** Dados do nó "Quando…" (gatilhos do fluxo), passados pelo editor via contexto. */
+export interface WhenInfo {
+  triggers: Trigger[] | null;
+  pending: Post[];
+  onAdd: () => void;
+  onEdit: (t: Trigger) => void;
+}
+export const WhenContext = createContext<WhenInfo | null>(null);
+
+/** Primeiro nó do fluxo: os gatilhos que fazem ele começar. */
 export function StartNode() {
+  const w = useContext(WhenContext);
+  const triggers = w?.triggers;
+  const empty = triggers && !triggers.length && !w.pending.length;
   return (
-    <div className="fnode-start">
-      ▶ Início
-      <Handle type="source" position={Position.Right} id="start" />
+    <div className={`fnode fnode-when ${empty ? 'has-error' : ''}`}>
+      <div className="fnode-head">
+        <span className="fnode-icon" style={{ background: '#f59e0b' }}>
+          ⚡
+        </span>
+        <span>Quando…</span>
+      </div>
+      <div className="fnode-body when-body">
+        {!triggers ? (
+          <span className="muted">Carregando gatilhos…</span>
+        ) : (
+          <>
+            {empty && <div className="muted">O gatilho é quem faz o fluxo começar. Adicione pelo menos um.</div>}
+            {triggers.map((t) => (
+              <button
+                key={t.id}
+                className={`when-item nodrag ${t.enabled ? '' : 'off'}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  w.onEdit(t);
+                }}
+                title="Editar gatilho"
+              >
+                <span>{TYPES[t.type]?.icon}</span>
+                <span className="when-text">{describeTrigger(t)}</span>
+                {!t.enabled && <span className="badge">pausado</span>}
+              </button>
+            ))}
+            {w.pending.map((p) => (
+              <div key={p.id} className="when-item pending" title="Vira gatilho quando o post for publicado">
+                <span>🗓</span>
+                <span className="when-text">
+                  {describeAutomation(p.automation!)} · post de {new Date(p.scheduled_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                </span>
+              </div>
+            ))}
+            <button
+              className="when-add nodrag"
+              onClick={(e) => {
+                e.stopPropagation();
+                w.onAdd();
+              }}
+            >
+              + Novo gatilho
+            </button>
+          </>
+        )}
+      </div>
+      <div className="fnode-outs">
+        <div className="fnode-out">
+          Então
+          <Handle type="source" position={Position.Right} id="start" style={{ top: '50%', right: -6 }} />
+        </div>
+      </div>
     </div>
   );
 }

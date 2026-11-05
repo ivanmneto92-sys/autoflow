@@ -16,7 +16,10 @@ import { FlowPostsModal } from '../components/FlowPostsModal';
 import { Icon, Loading, useToast } from '../components/ui';
 import { NODE_META, PALETTE, START_ID, autoLayout, newNode, removeNode, setOutput, toCanvas, uniqueId, type NodeType } from '../editor/graph';
 import { Inspector } from '../editor/Inspector';
-import { nodeTypes } from '../editor/NodeCard';
+import { nodeTypes, WhenContext } from '../editor/NodeCard';
+import { isEditable, type Post } from '../lib/posts';
+import { triggerDefaults, type Trigger } from '../lib/triggers';
+import { TriggerModal } from './Triggers';
 import { api, timeAgo } from '../lib/api';
 
 interface FlowRow {
@@ -49,6 +52,28 @@ function EditorInner() {
   const [publishing, setPublishing] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showPosts, setShowPosts] = useState(false);
+  // Gatilhos deste fluxo (nó "Quando…")
+  const [triggers, setTriggers] = useState<Trigger[] | null>(null);
+  const [pendingPosts, setPendingPosts] = useState<Post[]>([]);
+  const [editingTrigger, setEditingTrigger] = useState<Partial<Trigger> | null>(null);
+  const loadTriggers = useCallback(() => {
+    api<Trigger[]>('/app/triggers')
+      .then((l) => setTriggers(l.filter((t) => t.flow_id === id)))
+      .catch(() => setTriggers([]));
+    api<Post[]>('/app/posts')
+      .then((l) => setPendingPosts(l.filter((p) => p.automation?.flow_id === id && isEditable(p) && p.status !== 'cancelled')))
+      .catch(() => {});
+  }, [id]);
+  useEffect(() => loadTriggers(), [loadTriggers]);
+  const whenInfo = useMemo(
+    () => ({
+      triggers,
+      pending: pendingPosts,
+      onAdd: () => setEditingTrigger({ type: 'dm_keyword', config: triggerDefaults('dm_keyword'), priority: 0, enabled: true, flow_id: id }),
+      onEdit: (t: Trigger) => setEditingTrigger(t),
+    }),
+    [triggers, pendingPosts, id],
+  );
   const [stats, setStats] = useState<Record<string, number> | undefined>();
   const [flows, setFlows] = useState<{ id: string; name: string }[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -220,6 +245,12 @@ function EditorInner() {
   }
 
   async function publish() {
+    if (triggers && !triggers.length && !pendingPosts.length) {
+      const ok = confirm(
+        'Este fluxo não tem nenhum gatilho no "Quando…", então ninguém vai entrar nele (a não ser vindo de outro fluxo). Publicar mesmo assim?',
+      );
+      if (!ok) return;
+    }
     clearTimeout(timer.current);
     await save();
     setPublishing(true);
@@ -317,6 +348,7 @@ function EditorInner() {
           </p>
         </div>
         <div className="canvas">
+          <WhenContext.Provider value={whenInfo}>
           <ReactFlow
             nodes={canvas.nodes}
             edges={canvas.edges}
@@ -345,6 +377,7 @@ function EditorInner() {
             <Controls showInteractive={false} />
             <MiniMap pannable zoomable style={{ height: 90, width: 140 }} nodeColor={(n) => (n.type === 'start' ? '#5b5bd6' : (NODE_META[(n.data as any)?.node?.type as NodeType]?.color ?? '#999'))} />
           </ReactFlow>
+          </WhenContext.Provider>
         </div>
         <div className="inspector">
           {selNode && selected ? (
@@ -366,13 +399,13 @@ function EditorInner() {
             <div className="inspector-section stack">
               <h3>Como funciona</h3>
               <p className="muted">
-                O fluxo começa no <b>▶ Início</b> e segue as ligações. Clique num nó para editar. Arraste da bolinha à direita de uma saída até outro nó para ligar.
+                O fluxo começa no <b>⚡ Quando…</b>, onde ficam os gatilhos, e segue as ligações. Clique num nó para editar. Arraste da bolinha à direita de uma saída até outro nó para ligar.
               </p>
               <p className="muted">
                 As alterações são salvas sozinhas, mas só passam a valer para os clientes depois de <b>Publicar</b>. Conversas em andamento continuam na versão anterior.
               </p>
               <p className="muted">
-                Para o fluxo rodar, ele precisa de um <Link to="/gatilhos">gatilho</Link> (palavra-chave, comentário, story…).
+                Para o fluxo rodar, ele precisa de pelo menos um gatilho: clique em <b>+ Novo gatilho</b> no Quando… (palavra-chave, comentário, story, link, anúncio…).
               </p>
               {issues.length > 0 && (
                 <div className="stack-sm">
@@ -394,7 +427,29 @@ function EditorInner() {
           )}
         </div>
       </div>
-      {showPosts && <FlowPostsModal flowId={flow.id} flowPublished={flow.status === 'published'} onClose={() => setShowPosts(false)} />}
+      {showPosts && (
+        <FlowPostsModal
+          flowId={flow.id}
+          flowPublished={flow.status === 'published'}
+          onClose={() => {
+            setShowPosts(false);
+            loadTriggers();
+          }}
+        />
+      )}
+      {editingTrigger && (
+        <TriggerModal
+          initial={editingTrigger}
+          flows={[{ id: flow.id, name }]}
+          fixedFlow
+          onClose={() => setEditingTrigger(null)}
+          onSaved={(msg) => {
+            setEditingTrigger(null);
+            loadTriggers();
+            toast(msg ?? 'Gatilho salvo');
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -62,7 +62,15 @@ export interface FlowVersion {
   graph: FlowGraph;
 }
 
-export type TriggerType = 'comment' | 'dm_keyword' | 'story_mention' | 'postback' | 'default_reply';
+export type TriggerType =
+  | 'comment'
+  | 'dm_keyword'
+  | 'story_mention'
+  | 'story_reply'
+  | 'ref_link'
+  | 'ad_click'
+  | 'postback'
+  | 'default_reply';
 
 export interface Trigger {
   id: string;
