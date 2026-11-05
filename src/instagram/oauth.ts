@@ -4,6 +4,13 @@
  */
 import { config } from '../config.js';
 
+export function instagramConnectUrl(state: string): string {
+  const c = config();
+  const url = new URL('/auth/instagram/start', c.IG_CONNECT_START_BASE_URL ?? c.PUBLIC_BASE_URL);
+  url.searchParams.set('s', state);
+  return url.toString();
+}
+
 export function redirectUri(): string {
   return `${config().PUBLIC_BASE_URL}/auth/instagram/callback`;
 }
@@ -20,8 +27,10 @@ export function buildAuthorizeUrl(state: string): string {
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('state', state);
     url.searchParams.set('override_default_response_type', 'true');
-    if (c.IG_LOGIN_CONFIG_ID) url.searchParams.set('config_id', c.IG_LOGIN_CONFIG_ID);
-    else
+    if (c.IG_LOGIN_CONFIG_ID) {
+      url.searchParams.set('config_id', c.IG_LOGIN_CONFIG_ID);
+      url.searchParams.set('prompt', 'login');
+    } else
       url.searchParams.set(
         'scope',
         'instagram_basic,instagram_manage_messages,instagram_manage_comments,pages_show_list,pages_read_engagement,pages_manage_metadata,business_management',
@@ -90,16 +99,19 @@ export async function refreshLongLived(token: string): Promise<{ accessToken: st
 
 const fbBase = () => `https://graph.facebook.com/${config().IG_GRAPH_VERSION}`;
 
-/** code → token de usuário (curto) */
-export async function fbExchangeCode(code: string): Promise<string> {
+/** Troca o código pelo token emitido pela configuração de login. */
+export async function fbExchangeCode(code: string): Promise<{ accessToken: string; expiresIn: number | null }> {
   const c = config();
   const url = new URL(`${fbBase()}/oauth/access_token`);
   url.searchParams.set('client_id', c.IG_APP_ID);
   url.searchParams.set('client_secret', c.IG_APP_SECRET);
   url.searchParams.set('redirect_uri', redirectUri());
   url.searchParams.set('code', code);
-  const body = await parse<{ access_token: string }>(await fetch(url), 'Troca do code (Facebook)');
-  return body.access_token;
+  const body = await parse<{ access_token?: string; expires_in?: number }>(
+    await fetch(url, { signal: AbortSignal.timeout(10_000) }), 'Troca do code (Facebook)',
+  );
+  if (!body.access_token) throw new Error('Resposta sem access_token');
+  return { accessToken: body.access_token, expiresIn: body.expires_in && body.expires_in > 0 ? body.expires_in : null };
 }
 
 /** token curto → token longo (~60 dias). Tokens de Página gerados a partir dele não expiram. */
@@ -174,6 +186,40 @@ export async function fbDebugToken(token: string): Promise<{
   dbg.searchParams.set('access_token', `${c.IG_APP_ID}|${c.IG_APP_SECRET}`);
   const body = await parse<{ data: any }>(await fetch(dbg), 'Ler permissões do token');
   return body.data ?? {};
+}
+
+interface AssignedInstagramAccount {
+  id: string;
+  username: string;
+  name?: string;
+  profile_picture_url?: string;
+}
+
+/** Lista só os perfis atribuídos ao token do Login Unificado. */
+export async function fbListAssignedInstagramAccounts(token: string): Promise<AssignedInstagramAccount[]> {
+  const url = new URL(`${fbBase()}/me/assigned_instagram_accounts`);
+  url.searchParams.set('fields', 'id,username,name,profile_picture_url');
+  url.searchParams.set('limit', '100');
+  const accounts = new Map<string, AssignedInstagramAccount>();
+  const cursors = new Set<string>();
+
+  while (true) {
+    const page = await parse<{
+      data: AssignedInstagramAccount[];
+      paging?: { next?: string; cursors?: { after?: string } };
+    }>(await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    }), 'Listar contas atribuídas');
+    for (const account of page.data) {
+      if (/^\d+$/.test(account.id) && account.username) accounts.set(account.id, account);
+    }
+    if (!page.paging?.next) return [...accounts.values()];
+    const after = page.paging.cursors?.after;
+    if (!after || cursors.has(after)) throw new Error('Paginação inválida das contas atribuídas');
+    cursors.add(after);
+    url.searchParams.set('after', after);
+  }
 }
 
 type IgFound = { igUserId: string; username: string; name?: string; profilePictureUrl?: string; pageId?: string; pageToken?: string };

@@ -185,9 +185,10 @@ export class GraphIgClient implements IgClient {
   }
 
   /** Inscreve a conta nos webhooks do app. */
-  async subscribeWebhooks(token: string, fields = ['messages', 'messaging_postbacks', 'comments']) {
-    return this.call<{ success: boolean }>(token, `/me/subscribed_apps?subscribed_fields=${fields.join(',')}`, {
+  async subscribeWebhooks(token: string, fields = ['messages', 'messaging_postbacks', 'comments'], accountId = 'me') {
+    return this.call<{ success: boolean }>(token, `/${accountId}/subscribed_apps?subscribed_fields=${fields.join(',')}`, {
       method: 'POST',
+      signal: AbortSignal.timeout(10_000),
     });
   }
 

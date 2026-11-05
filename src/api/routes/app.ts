@@ -10,6 +10,7 @@ import { config } from '../../config.js';
 import { payload, validateGraph } from '../../flow/schema.js';
 import { parseTriggerConfig, TriggerConfigSchemas } from '../../flow/triggers.js';
 import { GraphIgClient } from '../../instagram/client.js';
+import { instagramConnectUrl } from '../../instagram/oauth.js';
 import { signState } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
 import { PgStore } from '../../store/pg.js';
@@ -199,7 +200,7 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
 
   app.post('/app/connect-link', async (req) => {
     const s = signState({ workspaceId: wsOf(req) }, config().STATE_SECRET, 7 * 24 * 3600);
-    return { url: `${config().PUBLIC_BASE_URL}/auth/instagram/start?s=${s}` };
+    return { url: instagramConnectUrl(s) };
   });
 
   app.get('/app/accounts/:id/media', async (req) => {

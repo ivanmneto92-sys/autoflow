@@ -5,7 +5,7 @@ import type postgres from 'postgres';
 import { config } from '../config.js';
 import { encrypt } from '../lib/crypto.js';
 import { GraphIgClient } from './client.js';
-import { exchangeLongLived, fbDebugToken, lastDiag, fbExchangeLongLived, fbIgAccountsFromToken, fbListInstagramAccounts, fbSubscribePage } from './oauth.js';
+import { exchangeLongLived, fbDebugToken, lastDiag, fbExchangeLongLived, fbListAssignedInstagramAccounts, fbIgAccountsFromToken, fbListInstagramAccounts, fbSubscribePage } from './oauth.js';
 
 interface AccountData {
   igUserId: string;
@@ -17,11 +17,12 @@ interface AccountData {
 }
 
 export async function saveAccount(
-  sql: postgres.Sql,
+  sql: postgres.Sql | postgres.TransactionSql,
   workspaceId: string,
   a: AccountData,
   token: string,
   expiresInSec: number | null,
+  keepWorkspace = false,
 ): Promise<string> {
   const [acc] = await sql`
     insert into autoflow.ig_accounts (workspace_id, ig_user_id, username, name, profile_picture_url, account_type, page_id, status)
@@ -31,14 +32,66 @@ export async function saveAccount(
       workspace_id = excluded.workspace_id, username = excluded.username, name = excluded.name,
       profile_picture_url = excluded.profile_picture_url, account_type = excluded.account_type,
       page_id = excluded.page_id, status = 'active', updated_at = now()
+    where not ${keepWorkspace} or ig_accounts.workspace_id = excluded.workspace_id
     returning id`;
+  if (!acc) throw new UnifiedLoginError('workspace_conflict');
   const expires = expiresInSec ? sql`now() + make_interval(secs => ${expiresInSec})` : sql`null`;
   await sql`
     insert into autoflow.ig_account_tokens (ig_account_id, access_token_enc, token_expires_at)
-    values (${acc!.id}, ${encrypt(token, config().ENCRYPTION_KEY)}, ${expires})
+    values (${acc.id}, ${encrypt(token, config().ENCRYPTION_KEY)}, ${expires})
     on conflict (ig_account_id) do update set
       access_token_enc = excluded.access_token_enc, token_expires_at = excluded.token_expires_at, refreshed_at = now()`;
-  return acc!.id as string;
+  return acc.id as string;
+}
+
+const unifiedLoginMessages = {
+  account_lookup: 'A Meta não conseguiu listar as contas autorizadas. Tente conectar novamente.',
+  no_accounts: 'Nenhuma conta profissional foi autorizada. Selecione sua conta do Instagram na tela da Meta.',
+  workspace_conflict: 'Essa conta do Instagram já pertence a outro negócio no autoflow.',
+  webhook_subscription: 'A Meta não confirmou a inscrição da conta nas notificações. Confira as permissões de mensagens e comentários e tente novamente.',
+};
+
+export class UnifiedLoginError extends Error {
+  constructor(readonly stage: keyof typeof unifiedLoginMessages) {
+    super(unifiedLoginMessages[stage]);
+  }
+}
+
+export async function connectUnifiedInstagram(
+  sql: postgres.Sql,
+  workspaceId: string,
+  token: string,
+  expiresIn: number | null,
+): Promise<string[]> {
+  const accounts = await fbListAssignedInstagramAccounts(token).catch(() => {
+    throw new UnifiedLoginError('account_lookup');
+  });
+  if (!accounts.length) throw new UnifiedLoginError('no_accounts');
+
+  // Ordem estável para reconexões simultâneas que compartilhem contas.
+  accounts.sort((a, b) => a.id.localeCompare(b.id));
+  const ig = new GraphIgClient();
+
+  return sql.begin(async (tx) => {
+    for (const account of accounts) {
+      await saveAccount(tx, workspaceId, {
+        igUserId: account.id,
+        username: account.username,
+        name: account.name,
+        profilePictureUrl: account.profile_picture_url,
+        accountType: 'BUSINESS',
+      }, token, expiresIn, true);
+    }
+
+    for (const account of accounts) {
+      const result = await ig.subscribeWebhooks(token, undefined, account.id).catch(() => {
+        throw new UnifiedLoginError('webhook_subscription');
+      });
+      if (result.success !== true) throw new UnifiedLoginError('webhook_subscription');
+    }
+
+    return accounts.map((account) => account.username);
+  });
 }
 
 /**
