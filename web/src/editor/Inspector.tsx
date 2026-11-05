@@ -339,6 +339,7 @@ function CarouselForm({ node, set }: { node: Extract<FlowNode, { type: 'carousel
 const COND_TYPES: [string, string][] = [
   ['business_hours', 'Está aberto agora (horário de funcionamento)'],
   ['is_new_contact', 'É um contato novo'],
+  ['is_follower', 'Segue a conta no Instagram'],
   ['has_tag', 'Tem a tag'],
   ['field_exists', 'Campo preenchido'],
   ['field_equals', 'Campo igual a'],
@@ -383,6 +384,12 @@ function ConditionForm({ node, set }: { node: Extract<FlowNode, { type: 'conditi
                 </button>
               )}
             </div>
+            {w.type === 'is_follower' && (
+              <span className="hint">
+                A Meta só informa isso depois que a pessoa interage. Em fluxos de comentário, coloque antes uma mensagem com botão (ex.: “Já te sigo ✅”) e
+                ligue o botão nesta condição.
+              </span>
+            )}
             {'tag' in w && <input className="input" placeholder="nome-da-tag" value={w.tag} onChange={(e) => set((d) => (d.rules[i].when.tag = e.target.value))} />}
             {'field' in w && <input className="input mono" placeholder="campo (ex.: telefone)" value={w.field} onChange={(e) => set((d) => (d.rules[i].when.field = e.target.value))} />}
             {'var' in w && <input className="input mono" placeholder="variável" value={w.var} onChange={(e) => set((d) => (d.rules[i].when.var = e.target.value))} />}

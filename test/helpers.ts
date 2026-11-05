@@ -24,6 +24,12 @@ export class FakeIg implements IgClient {
   async getUserProfile() {
     return { name: 'Maria Silva', username: 'maria.silva' };
   }
+  followers = new Set<string>();
+  followError = false;
+  async getFollowStatus(_t: string, igsid: string) {
+    if (this.followError) throw new Error('User consent is required to access user profile');
+    return this.followers.has(igsid);
+  }
 }
 
 export function setup(opts: { quota?: boolean; settings?: Account['settings']; now?: Date } = {}) {

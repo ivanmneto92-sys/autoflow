@@ -125,6 +125,8 @@ export function describeCondition(c: any): string {
       return 'está aberto';
     case 'is_new_contact':
       return 'é contato novo';
+    case 'is_follower':
+      return 'segue a conta';
     case 'has_tag':
       return `tem a tag "${c.tag}"`;
     case 'field_exists':

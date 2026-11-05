@@ -31,6 +31,7 @@ export const ConditionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('var_equals'), var: z.string(), value: z.string() }),
   z.object({ type: z.literal('business_hours') }),
   z.object({ type: z.literal('is_new_contact') }),
+  z.object({ type: z.literal('is_follower') }), // a pessoa segue a conta (precisa ter interagido antes)
   z.object({
     type: z.literal('last_text_matches'),
     keywords: z.array(z.string()).min(1),

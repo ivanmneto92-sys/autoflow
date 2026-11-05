@@ -7,7 +7,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from '../../config.js';
 import { createEngine } from '../../engine/factory.js';
-import { SIM_TOKEN } from '../../instagram/client.js';
+import { SIM_TOKEN, simFollowers } from '../../instagram/client.js';
 import type { InboundEvent } from '../../instagram/webhook.js';
 import { encrypt } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
@@ -43,7 +43,8 @@ export async function simulatorRoutes(app: FastifyInstance, wsOf: (req: FastifyR
                   where ct.contact_id = c.id), '{}') as tags
       from autoflow.contacts c left join autoflow.contact_fields cf on cf.contact_id = c.id
       where c.workspace_id = ${ws} and c.igsid = ${igsid}`;
-    if (!c) return { contact: null, messages: [], session: null };
+    const follows = simFollowers.has(igsid);
+    if (!c) return { contact: null, messages: [], session: null, follows };
     const messages = await sql`
       select id, direction, source, text, payload, created_at from autoflow.messages
       where contact_id = ${c.id} order by created_at, id limit 500`;
@@ -54,13 +55,24 @@ export async function simulatorRoutes(app: FastifyInstance, wsOf: (req: FastifyR
       contact: { id: c.id, tags: c.tags, fields: c.fields, bot_paused_until: c.bot_paused_until },
       messages,
       session: session ?? null,
+      follows,
     };
   }
 
   app.get('/app/simulator', async (req) => state(wsOf(req)));
 
+  /** Marca se o "cliente" do simulador segue a conta (para testar a condição "Segue a conta"). */
+  app.post('/app/simulator/follow', async (req) => {
+    const ws = wsOf(req);
+    const { follows } = z.object({ follows: z.boolean() }).parse(req.body);
+    if (follows) simFollowers.add(simIds(ws).igsid);
+    else simFollowers.delete(simIds(ws).igsid);
+    return state(ws);
+  });
+
   app.post('/app/simulator/reset', async (req) => {
     const ws = wsOf(req);
+    simFollowers.delete(simIds(ws).igsid);
     await sql`delete from autoflow.contacts where workspace_id = ${ws} and igsid = ${simIds(ws).igsid}`;
     return state(ws);
   });

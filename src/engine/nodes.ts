@@ -150,6 +150,23 @@ async function evaluate(ctx: RunContext, c: Condition): Promise<boolean> {
       return isOpen(ctx.account.settings.business_hours, ctx.account.settings.timezone ?? 'America/Sao_Paulo', ctx.now());
     case 'is_new_contact':
       return Boolean(ctx.session.vars.__new);
+    case 'is_follower': {
+      try {
+        const token = await store.getAccessToken(ctx.account.id);
+        return await ctx.deps.ig.getFollowStatus(token, ctx.contact.igsid);
+      } catch (err) {
+        // Normalmente: a pessoa ainda não interagiu (só comentou). Trata como "não segue" e registra o motivo.
+        await store.logEvent({
+          workspaceId: ctx.account.workspaceId,
+          contactId: ctx.contact.id,
+          flowId: ctx.version.flowId,
+          nodeId: ctx.session.currentNodeId ?? null,
+          type: 'follow_check_failed',
+          data: { message: (err as Error).message },
+        });
+        return false;
+      }
+    }
     case 'last_text_matches':
       return matchAny(String(ctx.session.vars.__last_text ?? ''), c.keywords, c.match);
   }

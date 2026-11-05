@@ -15,6 +15,7 @@ interface SimState {
   contact: { id: string; tags: string[]; fields: Record<string, unknown>; bot_paused_until: string | null } | null;
   messages: Msg[];
   session: { status: string; current_node_id: string | null; flow_name: string } | null;
+  follows?: boolean;
 }
 
 const STATUS: Record<string, string> = {
@@ -208,6 +209,20 @@ export function Simulator() {
               </div>
               <span className="hint">Dispara gatilhos de comentário configurados para "qualquer post".</span>
             </div>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={Boolean(st?.follows)}
+                onChange={async (e) => {
+                  try {
+                    setSt(await api<SimState>('/app/simulator/follow', { body: { follows: e.target.checked } }));
+                  } catch (err) {
+                    toast((err as Error).message, true);
+                  }
+                }}
+              />
+              Eu sigo a conta (para testar a condição “Segue a conta”)
+            </label>
             <button className="btn" disabled={busy} onClick={() => send({ type: 'story_mention' })}>
               📸 Marcar o perfil num story
             </button>

@@ -90,3 +90,50 @@ describe('gatilho: clique em anúncio', () => {
     expect(textOf(t.ig.sent[1]!.msg)).toBe('Qualquer anúncio');
   });
 });
+
+describe('condição: segue a conta', () => {
+  it('modelo "Só para seguidores": não segue → pede para seguir; segue → entrega', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { validateGraph } = await import('../src/flow/schema.js');
+    const tpl = JSON.parse(readFileSync('templates/seguidores.json', 'utf8'));
+    expect(validateGraph(tpl.flow).issues.filter((i) => i.level === 'error')).toEqual([]);
+
+    const t = setup();
+    const { flowId } = t.addFlow(tpl.flow);
+    for (const tr of tpl.triggers) t.addTrigger(flowId, tr.type, tr.config, tr.priority);
+    const { comment, postback } = await import('./helpers.js');
+
+    await t.engine.handleEvent(comment('eu quero!'));
+    const first = t.ig.sent[0]!.msg;
+    expect(first.kind).toBe('buttons');
+    const payload = first.kind === 'buttons' && first.buttons[0]!.type === 'postback' ? first.buttons[0]!.payload : '';
+
+    // Ainda não segue
+    await t.engine.handleEvent(postback(payload, 'user-1', 'Quero receber'));
+    expect(textOf(t.ig.sent[1]!.msg)).toContain('Ainda não encontrei você');
+    const again = t.ig.sent[1]!.msg;
+    const payload2 = again.kind === 'buttons' && again.buttons[0]!.type === 'postback' ? again.buttons[0]!.payload : '';
+
+    // Seguiu e clicou de novo
+    t.ig.followers.add('user-1');
+    await t.engine.handleEvent(postback(payload2, 'user-1', 'Pronto, já sigo'));
+    expect(textOf(t.ig.sent[2]!.msg)).toContain('Obrigado por me seguir');
+  });
+
+  it('sem consentimento da Meta: trata como "não segue" e registra o motivo', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow({
+      start: 'c',
+      nodes: {
+        c: { type: 'condition', data: { rules: [{ when: { type: 'is_follower' }, next: 's' }], else: 'n' } },
+        s: { type: 'message', data: { text: 'segue' } },
+        n: { type: 'message', data: { text: 'nao segue' } },
+      },
+    });
+    t.addTrigger(flowId, 'dm_keyword', { keywords: ['oi'] });
+    t.ig.followError = true;
+    await t.engine.handleEvent(dm('oi'));
+    expect(textOf(t.ig.sent[0]!.msg)).toBe('nao segue');
+    expect(t.store.events.some((e: { type: string }) => e.type === 'follow_check_failed')).toBe(true);
+  });
+});

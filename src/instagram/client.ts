@@ -52,6 +52,8 @@ export interface IgClient {
   sendMessage(token: string, igUserId: string, to: Recipient, msg: OutMessage): Promise<{ messageId?: string }>;
   replyToComment(token: string, commentId: string, text: string): Promise<{ id?: string }>;
   getUserProfile(token: string, igsid: string): Promise<{ name?: string; username?: string }>;
+  /** A pessoa segue a conta? Só funciona depois que ela mandou mensagem ou clicou num botão. */
+  getFollowStatus(token: string, igsid: string): Promise<boolean>;
 }
 
 export function toGraphMessage(msg: OutMessage): Record<string, unknown> {
@@ -103,6 +105,8 @@ export function toGraphMessage(msg: OutMessage): Record<string, unknown> {
 
 /** Token das contas do simulador: nada sai para a Meta, as mensagens só ficam no banco. */
 export const SIM_TOKEN = '__autoflow_simulator__';
+/** No simulador, quem "segue" a conta (marcado na tela do simulador). */
+export const simFollowers = new Set<string>();
 let simSeq = 0;
 const simId = (p: string) => `sim_${p}_${Date.now()}_${++simSeq}`;
 
@@ -170,6 +174,14 @@ export class GraphIgClient implements IgClient {
   async getUserProfile(token: string, igsid: string) {
     if (token === SIM_TOKEN) return { name: 'Cliente Teste', username: 'cliente.teste' };
     return this.call<{ name?: string; username?: string }>(token, `/${igsid}?fields=name,username`);
+  }
+
+  async getFollowStatus(token: string, igsid: string) {
+    if (token === SIM_TOKEN) return simFollowers.has(igsid);
+    const body = await this.call<{ is_user_follow_business?: boolean }>(token, `/${igsid}?fields=is_user_follow_business`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    return body.is_user_follow_business === true;
   }
 
   /** Dados da conta conectada. `user_id` = ID usado nos webhooks (entry.id). */
