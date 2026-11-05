@@ -104,18 +104,38 @@ function EditorInner() {
     return { issues, errorsByNode: map };
   }, [graph]);
 
-  const canvas = useMemo(
-    () => (graph ? toCanvas(graph, { selected, errors: new Set(errorsByNode.keys()), stats: showStats ? stats : undefined }) : { nodes: [], edges: [] }),
-    [graph, selected, errorsByNode, showStats, stats],
-  );
+  // Tamanho medido de cada nó. O React Flow esconde nós sem medida; como o canvas é recriado a cada
+  // mudança (inclusive a cada pixel do arrasto), precisamos devolver a medida senão o nó "some" enquanto arrasta.
+  const dims = useRef(new Map<string, { width: number; height: number }>());
+  const [dimsVersion, setDimsVersion] = useState(0);
+
+  const canvas = useMemo(() => {
+    if (!graph) return { nodes: [], edges: [] };
+    const c = toCanvas(graph, { selected, errors: new Set(errorsByNode.keys()), stats: showStats ? stats : undefined });
+    return {
+      ...c,
+      nodes: c.nodes.map((n) => {
+        const m = dims.current.get(n.id);
+        return m ? { ...n, measured: m } : n;
+      }),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, selected, errorsByNode, showStats, stats, dimsVersion]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       if (!graph) return;
       let g = graph;
       let changed = false;
+      let measured = false;
       for (const c of changes) {
-        if (c.type === 'position' && c.position) {
+        if (c.type === 'dimensions' && c.dimensions) {
+          const old = dims.current.get(c.id);
+          if (!old || old.width !== c.dimensions.width || old.height !== c.dimensions.height) {
+            dims.current.set(c.id, c.dimensions);
+            measured = true;
+          }
+        } else if (c.type === 'position' && c.position) {
           g = { ...g, layout: { ...(g.layout ?? {}), [c.id]: { x: Math.round(c.position.x), y: Math.round(c.position.y) } } };
           changed = true;
         } else if (c.type === 'remove' && c.id !== START_ID) {
@@ -127,6 +147,7 @@ function EditorInner() {
         }
       }
       if (changed) update(g);
+      else if (measured) setDimsVersion((v) => v + 1);
     },
     [graph, selected, update],
   );
