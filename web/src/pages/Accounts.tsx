@@ -27,14 +27,15 @@ export function Accounts() {
   const [link, setLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [intro, setIntro] = useState(false);
-  const connected = new URLSearchParams(window.location.search).get('connected');
+  const returned = new URLSearchParams(window.location.search).get('connected')?.split(',') ?? [];
+  const connected = (data ?? []).filter((account) => account.status === 'active' && returned.includes(account.username));
 
   async function connect(open: boolean) {
     setBusy(true);
     try {
       const { url } = await api<{ url: string }>('/app/connect-link', { body: {} });
-      setLink(url);
-      if (open) window.open(url, '_blank');
+      if (open) window.location.assign(url);
+      else setLink(url);
     } catch (e) {
       toast((e as Error).message, true);
     }
@@ -64,9 +65,9 @@ export function Accounts() {
         </div>
       </div>
       <ErrorBox error={error} />
-      {connected && (
+      {connected.length > 0 && (
         <div className="alert alert-success" style={{ marginBottom: 14 }}>
-          Instagram conectado: <b>@{connected.split(',').join(', @')}</b>. Agora crie um fluxo e um gatilho para o robô começar a responder.
+          Instagram conectado: <b>@{connected.map((account) => account.username).join(', @')}</b>. Agora crie um fluxo e um gatilho para o robô começar a responder.
         </div>
       )}
 
@@ -133,27 +134,18 @@ export function Accounts() {
         <Modal title="Conectar Instagram" onClose={() => setIntro(false)}>
           <div className="stack">
             <div>
-              <h3>Faltam algumas etapas</h3>
+              <h3>Entre com a sua conta profissional</h3>
               <p className="muted" style={{ marginTop: 6 }}>
-                Você será levado para a Meta. Escolha o portfólio e a conta do Instagram, mantenha as permissões ativadas e confirme. Ao final, você volta para cá com a conta conectada.
+                Na tela da Meta, escolha Continuar com o Instagram e entre com sua conta profissional. Selecione a conta que quer conectar, revise as permissões e confirme.
               </p>
             </div>
             <button
               className="btn btn-primary"
               style={{ height: 42 }}
               disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  const { url } = await api<{ url: string }>('/app/connect-link', { body: {} });
-                  window.location.href = url; // mesma aba, como no ManyChat
-                } catch (e) {
-                  toast((e as Error).message, true);
-                  setBusy(false);
-                }
-              }}
+              onClick={() => connect(true)}
             >
-              {busy ? 'Abrindo a Meta…' : 'Entrar pela Meta'}
+              {busy ? 'Abrindo a Meta…' : 'Continuar para o login'}
             </button>
             <p className="muted small">
               A conta precisa ser <b>Profissional</b> (Comercial ou Criador). Se você ainda não tem, mude no app do Instagram em Configurações → Tipo de conta e ferramentas.

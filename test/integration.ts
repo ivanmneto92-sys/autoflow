@@ -4,6 +4,7 @@
  *   npm run test:int
  */
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { buildServer } from '../src/api/app.js';
 import { config } from '../src/config.js';
 import { Engine } from '../src/engine/engine.js';
@@ -65,7 +66,9 @@ assert.ok(n >= 3, 'mensagens registradas');
 console.log(`  ✓ ${n} mensagens no log`);
 
 // ── API ──
-const app = await buildServer();
+const panelUser = { id: randomUUID(), email: 'teste@example.com' };
+const app = await buildServer({ verifyToken: async (token) => token === 'panel-test-token' ? panelUser : null });
+await sql`insert into autoflow.workspace_members (workspace_id, user_id) values (${ws.id}, ${panelUser.id})`;
 const verify = await app.inject({ url: `/webhooks/instagram?hub.mode=subscribe&hub.verify_token=${config().IG_WEBHOOK_VERIFY_TOKEN}&hub.challenge=abc` });
 assert.equal(verify.body, 'abc');
 
@@ -91,6 +94,78 @@ assert.equal(start.statusCode, 302);
 assert.ok(/^https:\/\/www\.(instagram\.com\/oauth\/authorize|facebook\.com\/v[\d.]+\/dialog\/oauth)/.test(String(start.headers.location)));
 console.log('  login URL:', String(start.headers.location).split('&state')[0]);
 console.log('  ✓ link de conexão redireciona para o Instagram');
+
+// Retorno do Login Unificado com uma conta atribuída e confirmação do webhook.
+if (config().IG_LOGIN_MODE === 'facebook' && config().IG_LOGIN_CONFIG_ID) {
+  const panelHeaders = { authorization: 'Bearer panel-test-token', 'x-workspace-id': ws.id };
+  const panelLink = await app.inject({ method: 'POST', url: '/app/connect-link', headers: panelHeaders });
+  assert.equal(panelLink.statusCode, 200);
+  const panelStart = new URL(panelLink.json().url);
+  assert.equal(panelStart.origin, new URL(config().IG_CONNECT_START_BASE_URL ?? config().PUBLIC_BASE_URL).origin);
+  const beginLogin = () => app.inject({ url: panelStart.pathname + panelStart.search });
+  const authorize = new URL(String((await beginLogin()).headers.location));
+  assert.equal(authorize.searchParams.get('prompt'), 'login');
+  assert.equal(authorize.searchParams.get('config_id'), config().IG_LOGIN_CONFIG_ID);
+  const callback = '/auth/instagram/callback?' + new URLSearchParams({
+    code: 'test-code',
+    state: authorize.searchParams.get('state')!,
+  });
+
+  const unifiedId = `${IG}1`;
+  const fetchOriginal = globalThis.fetch;
+  let subscribed = false;
+  let subscriptionAccepted = false;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    assert.equal(url.hostname, 'graph.facebook.com');
+    if (url.pathname.endsWith('/oauth/access_token')) {
+      assert.equal(url.searchParams.get('redirect_uri'), authorize.searchParams.get('redirect_uri'));
+      assert.equal(url.searchParams.get('code'), 'test-code');
+      return Response.json({ access_token: 'system-user-test-token' });
+    }
+    assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer system-user-test-token');
+    if (url.pathname.endsWith('/me/assigned_instagram_accounts')) {
+      return Response.json({ data: [{ id: unifiedId, username: 'teste_unificado' }] });
+    }
+    assert.ok(url.pathname.endsWith(`/${unifiedId}/subscribed_apps`), url.pathname);
+    assert.equal(init?.method, 'POST');
+    assert.equal(url.searchParams.get('subscribed_fields'), 'messages,messaging_postbacks,comments');
+    subscribed = true;
+    return Response.json({ success: subscriptionAccepted });
+  };
+  try {
+    const rejected = await app.inject({ url: callback });
+    assert.equal(rejected.statusCode, 500);
+    assert.match(rejected.body, /inscrição da conta nas notificações/);
+    assert.ok(subscribed);
+    assert.equal((await sql`select id from autoflow.ig_accounts where ig_user_id = ${unifiedId}`).length, 0);
+
+    const result = await beginLogin();
+    const retry = new URL(String(result.headers.location));
+    subscriptionAccepted = true;
+    const connected = await app.inject({ url: '/auth/instagram/callback?' + new URLSearchParams({
+      code: 'test-code',
+      state: retry.searchParams.get('state')!,
+    }) });
+    assert.equal(connected.statusCode, config().DASHBOARD_URL ? 302 : 200);
+    assert.match(String(connected.headers.location ?? connected.body), /teste_unificado/);
+    const [account] = await sql`
+      select a.workspace_id, a.status, t.token_expires_at
+      from autoflow.ig_accounts a join autoflow.ig_account_tokens t on t.ig_account_id = a.id
+      where a.ig_user_id = ${unifiedId}`;
+    assert.equal(account?.workspace_id, ws.id);
+    assert.equal(account?.status, 'active');
+    assert.equal(account?.token_expires_at, null);
+    const accounts = await app.inject({ url: '/app/accounts', headers: panelHeaders });
+    assert.equal(accounts.statusCode, 200);
+    assert.ok(accounts.json().some((item: { username: string; status: string }) =>
+      item.username === 'teste_unificado' && item.status === 'active',
+    ));
+    console.log('  ✓ Login Unificado: confirma webhook antes de concluir e salva conta no negócio correto');
+  } finally {
+    globalThis.fetch = fetchOriginal;
+  }
+}
 
 // Criar e publicar fluxo via API
 const flow = await app.inject({

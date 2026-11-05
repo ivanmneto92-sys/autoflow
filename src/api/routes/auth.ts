@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { config } from '../../config.js';
-import { connectFacebookUser, connectInstagramUser } from '../../instagram/connect.js';
+import { connectFacebookUser, connectInstagramUser, connectUnifiedInstagram, UnifiedLoginError } from '../../instagram/connect.js';
 import { buildAuthorizeUrl, exchangeCode, fbExchangeCode } from '../../instagram/oauth.js';
 import { safeEqual, signState, verifyState } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
@@ -27,6 +27,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   /** Link de conexão (gerado em /admin/workspaces/:id/connect-link) → tela do Instagram */
   app.get('/auth/instagram/start', async (req, reply) => {
+    reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer');
     const { s } = req.query as { s?: string };
     const data = s ? verifyState<{ workspaceId: string }>(s, config().STATE_SECRET) : null;
     if (!data) return reply.code(400).type('text/html').send(page('Link expirado', '<p>Peça um novo link de conexão.</p>'));
@@ -35,6 +36,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.get('/auth/instagram/callback', async (req, reply) => {
+    reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer');
     const q = req.query as { code?: string; state?: string; error?: string; error_description?: string };
     if (q.error) {
       return reply
@@ -44,15 +46,20 @@ export async function authRoutes(app: FastifyInstance) {
     const st = q.state ? verifyState<{ workspaceId: string }>(q.state, config().STATE_SECRET) : null;
     if (!q.code || !st) return reply.code(400).type('text/html').send(page('Link inválido', '<p>Tente conectar novamente.</p>'));
 
+    const cfg = config();
+    const unified = cfg.IG_LOGIN_MODE === 'facebook' && Boolean(cfg.IG_LOGIN_CONFIG_ID);
     try {
       const sql = db();
-      const usernames =
-        config().IG_LOGIN_MODE === 'facebook'
-          ? await connectFacebookUser(sql, st.workspaceId, await fbExchangeCode(q.code))
-          : await (async () => {
-              const short = await exchangeCode(q.code!);
-              return connectInstagramUser(sql, st.workspaceId, short.accessToken, short.userId);
-            })();
+      let usernames: string[];
+      if (cfg.IG_LOGIN_MODE === 'facebook') {
+        const { accessToken, expiresIn } = await fbExchangeCode(q.code);
+        usernames = unified
+          ? await connectUnifiedInstagram(sql, st.workspaceId, accessToken, expiresIn)
+          : await connectFacebookUser(sql, st.workspaceId, accessToken);
+      } else {
+        const short = await exchangeCode(q.code);
+        usernames = await connectInstagramUser(sql, st.workspaceId, short.accessToken, short.userId);
+      }
       req.log.info({ usernames, workspaceId: st.workspaceId }, 'Instagram conectado');
 
       const list = usernames.map((u) => `@${esc(u)}`).join(', ');
@@ -62,7 +69,14 @@ export async function authRoutes(app: FastifyInstance) {
         .type('text/html')
         .send(page('Instagram conectado ✅', `<p><b>${list}</b> já está pronta para as automações. Pode fechar esta página.</p>`));
     } catch (err) {
-      req.log.error({ err }, 'Falha no callback do OAuth');
+      let message = (err as Error).message ?? '';
+      if (unified) {
+        const stage = err instanceof UnifiedLoginError ? err.stage : 'callback';
+        req.log.warn({ stage, workspaceId: st.workspaceId }, 'Falha no callback do Login Unificado');
+        message = err instanceof UnifiedLoginError ? err.message : 'Não foi possível concluir a conexão com a Meta. Tente novamente.';
+      } else {
+        req.log.error({ err }, 'Falha no callback do OAuth');
+      }
       return reply
         .code(500)
         .type('text/html')
@@ -71,7 +85,7 @@ export async function authRoutes(app: FastifyInstance) {
             'Não foi possível conectar',
             `<p>Confira se a conta é <b>Profissional</b> (Comercial ou Criador de conteúdo)${
               config().IG_LOGIN_MODE === 'facebook' ? ' e se ela foi <b>selecionada</b> na tela da Meta' : ''
-            } e tente de novo.</p><p style="font-size:.85rem;color:#888">${esc((err as Error).message ?? '')}</p>${
+            } e tente de novo.</p><p style="font-size:.85rem;color:#888">${esc(message)}</p>${
               config().DASHBOARD_URL ? `<p><a href="${config().DASHBOARD_URL}">← Voltar ao painel</a></p>` : ''
             }`,
           ),

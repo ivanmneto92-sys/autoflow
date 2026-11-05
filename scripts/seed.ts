@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { config } from '../src/config.js';
 import { validateGraph } from '../src/flow/schema.js';
 import { parseTriggerConfig } from '../src/flow/triggers.js';
+import { instagramConnectUrl } from '../src/instagram/oauth.js';
 import { signState } from '../src/lib/crypto.js';
 import { closeDb, db } from '../src/lib/db.js';
 
@@ -62,6 +63,6 @@ console.log(`
   flow_id:      ${result.flowId}
 
 👉 Link para conectar o Instagram (válido 7 dias):
-  ${config().PUBLIC_BASE_URL}/auth/instagram/start?s=${s}
+  ${instagramConnectUrl(s)}
 `);
 await closeDb();

@@ -13,7 +13,15 @@ import { webhookRoutes } from './routes/webhooks.js';
 
 export async function buildServer(opts: { verifyToken?: TokenVerifier } = {}) {
   const app = Fastify({
-    logger: { level: config().LOG_LEVEL, redact: ['req.headers["x-api-key"]', 'req.headers.authorization'] },
+    logger: {
+      level: config().LOG_LEVEL,
+      redact: ['req.headers["x-api-key"]', 'req.headers.authorization'],
+      serializers: {
+        req(req) {
+          return { method: req.method, url: req.url?.split('?')[0], remoteAddress: req.ip };
+        },
+      },
+    },
     trustProxy: true,
     bodyLimit: 1_048_576,
   });

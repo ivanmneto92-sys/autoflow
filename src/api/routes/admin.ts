@@ -8,6 +8,7 @@ import { config } from '../../config.js';
 import { validateGraph, payload } from '../../flow/schema.js';
 import { parseTriggerConfig, TriggerInputSchema } from '../../flow/triggers.js';
 import { GraphIgClient } from '../../instagram/client.js';
+import { instagramConnectUrl } from '../../instagram/oauth.js';
 import { safeEqual, signState } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
 import { PgStore } from '../../store/pg.js';
@@ -54,7 +55,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post('/admin/workspaces/:id/connect-link', async (req) => {
     const id = uuid.parse((req.params as { id: string }).id);
     const s = signState({ workspaceId: id }, config().STATE_SECRET, 7 * 24 * 3600);
-    return { url: `${config().PUBLIC_BASE_URL}/auth/instagram/start?s=${s}` };
+    return { url: instagramConnectUrl(s) };
   });
 
   app.get('/admin/workspaces/:id/accounts', async (req) => {

@@ -5,6 +5,7 @@ const schema = z.object({
   NODE_ENV: z.string().default('development'),
   PORT: z.coerce.number().default(3000),
   PUBLIC_BASE_URL: z.string().url(), // ex.: https://api.autoflow.com.br (usado no redirect do OAuth)
+  IG_CONNECT_START_BASE_URL: z.string().url().optional(), // URL do botão quando só o callback passa pelo túnel
   DASHBOARD_URL: z.string().url().optional(), // para onde o usuário volta após conectar
 
   // Painel: login via Supabase Auth (URL do projeto + chave publicável/anon)
