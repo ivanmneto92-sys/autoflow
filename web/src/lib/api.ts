@@ -75,3 +75,32 @@ export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
+
+/** Envia um arquivo para a API (corpo bruto) com progresso de 0 a 1. */
+export async function apiUpload(
+  file: Blob,
+  onProgress?: (p: number) => void,
+): Promise<{ url: string; kind: 'image' | 'video'; size: number }> {
+  const { data } = await supabase.auth.getSession();
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BASE}/app/media`);
+    if (data.session) xhr.setRequestHeader('Authorization', `Bearer ${data.session.access_token}`);
+    if (currentWorkspace) xhr.setRequestHeader('x-workspace-id', currentWorkspace);
+    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => {
+      let body: any = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        /* resposta sem JSON */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+      else if (xhr.status === 413) reject(new ApiError(body?.error ?? 'Arquivo grande demais', 413, body));
+      else reject(new ApiError(body?.error ?? `Erro ${xhr.status} ao enviar o arquivo`, xhr.status, body));
+    };
+    xhr.onerror = () => reject(new ApiError('Não foi possível enviar o arquivo. Confira se a API está no ar.', 0, null));
+    xhr.send(file);
+  });
+}

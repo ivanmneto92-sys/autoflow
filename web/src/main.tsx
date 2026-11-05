@@ -17,6 +17,7 @@ import { Onboarding } from './pages/Onboarding';
 import { Settings } from './pages/Settings';
 import { Simulator } from './pages/Simulator';
 import { Triggers } from './pages/Triggers';
+import { Posts } from './pages/Posts';
 
 function Root() {
   const { ready, session, workspace, workspaces, meError } = useSession();
@@ -30,6 +31,7 @@ function Root() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/fluxos" element={<Flows />} />
         <Route path="/gatilhos" element={<Triggers />} />
+        <Route path="/publicacoes" element={<Posts />} />
         <Route path="/simulador" element={<Simulator />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/inbox/:id" element={<Inbox />} />

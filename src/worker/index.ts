@@ -1,5 +1,5 @@
 /**
- * Worker: processa webhooks (fila inbound), jobs agendados (atrasos/timeouts) e manutenção (refresh de tokens).
+ * Worker: processa webhooks (fila inbound), jobs agendados (atrasos/timeouts), publicações agendadas e manutenção (refresh de tokens).
  * Rodar: npm run dev:worker  |  produção: npm run start:worker
  */
 import { DelayedError, Worker, type Job } from 'bullmq';
@@ -16,6 +16,9 @@ import {
   maintenanceQueue,
   type InboundJob,
 } from '../queue/queues.js';
+import { GraphIgClient } from '../instagram/client.js';
+import { startPublisher } from '../posts/publisher.js';
+import { PgPostRepo } from '../posts/repo.js';
 import { PgStore } from '../store/pg.js';
 import { refreshExpiringTokens } from './maintenance.js';
 
@@ -87,11 +90,17 @@ for (const w of [inboundWorker, scheduledWorker, maintenanceWorker]) {
   w.on('failed', (job, err) => logger.error({ err, jobId: job?.id, queue: w.name }, 'Job falhou'));
 }
 
+// Publicações agendadas: procura posts vencidos a cada PUBLISH_POLL_SECONDS
+const publisher = startPublisher(
+  { repo: new PgPostRepo(db(), store), ig: new GraphIgClient(), log: logger },
+  cfg.PUBLISH_POLL_SECONDS * 1000,
+);
+
 logger.info('Worker autoflow iniciado');
 
 async function shutdown() {
   logger.info('Encerrando worker...');
-  await Promise.all([inboundWorker.close(), scheduledWorker.close(), maintenanceWorker.close()]);
+  await Promise.all([inboundWorker.close(), scheduledWorker.close(), maintenanceWorker.close(), publisher.stop()]);
   await closeDb();
   r.disconnect();
   process.exit(0);

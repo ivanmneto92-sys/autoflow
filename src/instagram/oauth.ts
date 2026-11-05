@@ -33,7 +33,7 @@ export function buildAuthorizeUrl(state: string): string {
     } else
       url.searchParams.set(
         'scope',
-        'instagram_basic,instagram_manage_messages,instagram_manage_comments,pages_show_list,pages_read_engagement,pages_manage_metadata,business_management',
+        'instagram_basic,instagram_manage_messages,instagram_manage_comments,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_metadata,business_management',
       );
     return url.toString();
   }

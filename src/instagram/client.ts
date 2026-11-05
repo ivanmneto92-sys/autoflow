@@ -192,6 +192,39 @@ export class GraphIgClient implements IgClient {
     });
   }
 
+  // ── Publicação de conteúdo (Content Publishing API) ──
+  // Passo 1: cria o contêiner (a Meta baixa a mídia da URL pública). Passo 2: publica o contêiner.
+
+  private form(params: Record<string, string>): RequestInit {
+    return {
+      method: 'POST',
+      body: new URLSearchParams(params).toString(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      signal: AbortSignal.timeout(60_000),
+    };
+  }
+
+  async createMediaContainer(token: string, igUserId: string, params: Record<string, string>) {
+    return this.call<{ id: string }>(token, `/${igUserId}/media`, this.form(params));
+  }
+
+  /** IN_PROGRESS → FINISHED (pronto) | ERROR | EXPIRED | PUBLISHED */
+  async getContainerStatus(token: string, containerId: string) {
+    return this.call<{ status_code?: string; status?: string }>(token, `/${containerId}?fields=status_code,status`, {
+      signal: AbortSignal.timeout(20_000),
+    });
+  }
+
+  async publishMedia(token: string, igUserId: string, creationId: string) {
+    return this.call<{ id: string }>(token, `/${igUserId}/media_publish`, this.form({ creation_id: creationId }));
+  }
+
+  async getMediaInfo(token: string, mediaId: string) {
+    return this.call<{ id: string; permalink?: string }>(token, `/${mediaId}?fields=id,permalink`, {
+      signal: AbortSignal.timeout(20_000),
+    });
+  }
+
   /** Ice breakers (perguntas que aparecem na primeira conversa). */
   async setIceBreakers(token: string, items: { question: string; payload: string }[], locale = 'default') {
     return this.call<{ result: string }>(token, '/me/messenger_profile', {

@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { validateGraph, type FlowGraph, type FlowNode, type GraphIssue } from '../shared/schema';
+import { FlowPostsModal } from '../components/FlowPostsModal';
 import { Icon, Loading, useToast } from '../components/ui';
 import { NODE_META, PALETTE, START_ID, autoLayout, newNode, removeNode, setOutput, toCanvas, uniqueId, type NodeType } from '../editor/graph';
 import { Inspector } from '../editor/Inspector';
@@ -47,6 +48,7 @@ function EditorInner() {
   const [saveState, setSaveState] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   const [publishing, setPublishing] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showPosts, setShowPosts] = useState(false);
   const [stats, setStats] = useState<Record<string, number> | undefined>();
   const [flows, setFlows] = useState<{ id: string; name: string }[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -261,6 +263,9 @@ function EditorInner() {
         <Link to="/simulador" className="btn btn-sm" title="Testar os fluxos publicados no simulador">
           <Icon name="play" /> Testar
         </Link>
+        <button className="btn btn-sm" onClick={() => setShowPosts(true)} title="Ligar este fluxo aos comentários de uma publicação agendada">
+          <Icon name="calendar" /> Usar numa publicação
+        </button>
         <button className={`btn btn-sm ${showStats ? 'btn-primary' : ''}`} onClick={toggleStats}>
           Métricas
         </button>
@@ -368,6 +373,7 @@ function EditorInner() {
           )}
         </div>
       </div>
+      {showPosts && <FlowPostsModal flowId={flow.id} flowPublished={flow.status === 'published'} onClose={() => setShowPosts(false)} />}
     </div>
   );
 }

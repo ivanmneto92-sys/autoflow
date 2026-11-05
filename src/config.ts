@@ -31,7 +31,9 @@ const schema = z.object({
   IG_EXTRA_APP_SECRETS: z.string().default(''),
   IG_SCOPES: z
     .string()
-    .default('instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments'),
+    .default(
+      'instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish',
+    ),
 
   // 32 bytes em base64 — `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
   ENCRYPTION_KEY: z.string().min(40),
@@ -39,6 +41,12 @@ const schema = z.object({
   STATE_SECRET: z.string().min(16),
   // Protege as rotas /admin enquanto não existe painel
   ADMIN_API_KEY: z.string().min(16),
+
+  // Mídias das publicações agendadas: pasta local servida em PUBLIC_BASE_URL/media (a Meta baixa daí)
+  MEDIA_DIR: z.string().default('uploads'),
+  MEDIA_MAX_MB: z.coerce.number().positive().default(100),
+  // Intervalo (segundos) em que o worker procura publicações vencidas
+  PUBLISH_POLL_SECONDS: z.coerce.number().min(5).default(20),
 
   WORKER_CONCURRENCY: z.coerce.number().default(10),
   LOG_LEVEL: z.string().default('info'),

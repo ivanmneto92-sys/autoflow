@@ -8,3 +8,4 @@ coverage
 dump.rdb
 .vercel
 web/.env.local
+uploads

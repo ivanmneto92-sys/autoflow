@@ -6,6 +6,7 @@ const items = [
   { to: '/', label: 'Painel', icon: 'home', end: true },
   { to: '/fluxos', label: 'Fluxos', icon: 'flow' },
   { to: '/gatilhos', label: 'Gatilhos', icon: 'zap' },
+  { to: '/publicacoes', label: 'Publicações', icon: 'calendar' },
   { to: '/simulador', label: 'Simulador', icon: 'play' },
   { to: '/inbox', label: 'Inbox', icon: 'inbox' },
   { to: '/contatos', label: 'Contatos', icon: 'users' },

@@ -14,6 +14,8 @@ import { instagramConnectUrl } from '../../instagram/oauth.js';
 import { signState } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
 import { PgStore } from '../../store/pg.js';
+import { HttpError } from '../http.js';
+import { postRoutes } from './posts.js';
 import { simulatorRoutes } from './simulator.js';
 
 export interface AuthUser {
@@ -28,14 +30,6 @@ declare module 'fastify' {
   }
 }
 
-class HttpError extends Error {
-  constructor(
-    public statusCode: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
 
 // ── Verificação do token do Supabase (com cache curto) ──
 const cache = new Map<string, { user: AuthUser; until: number }>();
@@ -85,6 +79,12 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof HttpError) return reply.code(err.statusCode).send({ error: err.message });
     if (err instanceof z.ZodError) return reply.code(400).send({ error: 'Dados inválidos', issues: err.issues });
+    // Erros do próprio Fastify (corpo grande demais, tipo não aceito…) mantêm o status 4xx
+    const status = (err as { statusCode?: number }).statusCode;
+    if (status && status >= 400 && status < 500) {
+      const msg = status === 415 ? 'Formato não aceito. Use imagem JPG ou vídeo MP4/MOV.' : (err as Error).message;
+      return reply.code(status).send({ error: msg });
+    }
     req.log.error({ err }, 'Erro na API do painel');
     const msg = (err as Error).message;
     return reply.code(500).send({ error: msg || 'Erro interno' });
@@ -118,6 +118,7 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
   }
 
   await simulatorRoutes(app, wsOf);
+  await postRoutes(app, wsOf);
 
   // ───────────── Usuário e workspaces ─────────────
   app.get('/app/me', async (req) => {

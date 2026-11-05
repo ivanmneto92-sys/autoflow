@@ -106,6 +106,16 @@ O painel já vem configurado com o projeto do autoflow em `web/src/lib/supabase.
 
 Telas: painel com métricas, editor visual de fluxos, gatilhos (com seletor de post), inbox com resposta humana, contatos com exportação CSV, conexão do Instagram e configurações (horário de funcionamento e pausa do robô).
 
+## Publicações agendadas
+
+Página **Publicações** do painel: agenda imagem ou Reels e, opcionalmente, já liga uma automação de comentários àquele post.
+
+- O arquivo é enviado para a API (`POST /app/media`) e fica em `MEDIA_DIR` (padrão `uploads/`), servido em `PUBLIC_BASE_URL/media/...` — é dessa URL que a Meta baixa a mídia.
+- O **worker** procura posts vencidos a cada `PUBLISH_POLL_SECONDS`, cria o contêiner na Meta, espera processar, publica e cria um gatilho de **comentário só para aquele post** (prioridade 100), apontando para o fluxo escolhido.
+- Imagens são convertidas para JPG no navegador e cortadas para a proporção do feed (4:5 a 1,91:1). Reels: MP4/MOV, 3 s a 15 min.
+- Exige a permissão de publicar: `instagram_content_publish` (login unificado/Facebook — adicione na configuração do login na Meta) ou `instagram_business_content_publish` (login do Instagram). Quem já conectou precisa reconectar uma vez para aceitar.
+- Se o worker cair no meio, o post volta para a fila mantendo o contêiner (um contêiner só publica uma vez, então não duplica).
+
 ## Usando a API admin (sem painel)
 
 Todas as rotas `/admin` exigem o header `x-api-key: ADMIN_API_KEY`.

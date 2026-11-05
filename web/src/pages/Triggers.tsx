@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Empty, ErrorBox, Icon, Loading, Modal, useLoad, useToast } from '../components/ui';
-import { api } from '../lib/api';
+import { api, formatDateTime } from '../lib/api';
+import { describeAutomation, isEditable, POST_STATUS, postDate, postTitle, type Post } from '../lib/posts';
 import { useSession } from '../lib/session';
 
 type TType = 'comment' | 'dm_keyword' | 'story_mention' | 'postback' | 'default_reply';
@@ -50,6 +51,19 @@ export function Triggers() {
   const { data, error, loading, reload } = useLoad(() => api<Trigger[]>('/app/triggers'), [workspace?.id]);
   const flows = useLoad(() => api<{ id: string; name: string; status: string }[]>('/app/flows'), [workspace?.id]);
   const [editing, setEditing] = useState<Partial<Trigger> | null>(null);
+  const posts = useLoad(() => api<Post[]>('/app/posts'), [workspace?.id]);
+  const pending = (posts.data ?? []).filter((p) => p.automation && (isEditable(p) || p.status === 'publishing') && p.status !== 'cancelled');
+
+  async function unlinkPost(p: Post) {
+    if (!confirm('Tirar a automação desta publicação? O post continua agendado.')) return;
+    try {
+      await api(`/app/posts/${p.id}/automation`, { method: 'PUT', body: { automation: null } });
+      toast('Automação removida');
+      posts.reload();
+    } catch (e) {
+      toast((e as Error).message, true);
+    }
+  }
 
   async function toggle(t: Trigger) {
     await api(`/app/triggers/${t.id}`, { method: 'PUT', body: { ...pick(t), enabled: !t.enabled } });
@@ -78,12 +92,52 @@ export function Triggers() {
       <ErrorBox error={error} />
       {loading ? (
         <Loading />
-      ) : !data?.length ? (
+      ) : !data?.length && !pending.length ? (
         <div className="card">
           <Empty title="Nenhum gatilho" text="Crie um gatilho para ligar um fluxo a palavras-chave, comentários ou stories." />
         </div>
       ) : (
         <div className="stack">
+          {pending.length > 0 && (
+            <div className="card">
+              <div className="card-header">
+                <h3>🗓 Aguardando publicação</h3>
+                <span className="muted small">Viram gatilhos de comentário assim que o post sair.</span>
+              </div>
+              <table className="table">
+                <tbody>
+                  {pending.map((p) => (
+                    <tr key={p.id}>
+                      <td>
+                        <div style={{ fontWeight: 550 }}>
+                          {describeAutomation(p.automation!)} · em "{postTitle(p)}"
+                        </div>
+                        <div className="muted small">
+                          → <Link to={`/fluxos/${p.automation!.flow_id}`}>{p.flow_name ?? 'fluxo removido'}</Link>
+                          {p.flow_status !== 'published' && <span className="badge badge-warning" style={{ marginLeft: 6 }}>fluxo não publicado</span>}
+                          <span style={{ marginLeft: 6 }}>
+                            · <span className={`badge ${POST_STATUS[p.status].cls}`}>{POST_STATUS[p.status].label}</span> {formatDateTime(postDate(p).toISOString())}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ width: 230, textAlign: 'right' }}>
+                        <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                          <Link className="btn btn-sm" to="/publicacoes">
+                            Ver publicação
+                          </Link>
+                          {isEditable(p) && (
+                            <button className="btn btn-sm btn-danger btn-ghost" onClick={() => unlinkPost(p)} aria-label="Remover automação">
+                              <Icon name="trash" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {groups.map((g) => (
             <div className="card" key={g.type}>
               <div className="card-header">
@@ -131,10 +185,11 @@ export function Triggers() {
           initial={editing}
           flows={(flows.data ?? []).filter((f) => f.status !== 'archived')}
           onClose={() => setEditing(null)}
-          onSaved={() => {
+          onSaved={(msg) => {
             setEditing(null);
             reload();
-            toast('Gatilho salvo');
+            posts.reload();
+            toast(msg ?? 'Gatilho salvo');
           }}
         />
       )}
@@ -146,12 +201,14 @@ function pick(t: Partial<Trigger>) {
   return { flow_id: t.flow_id, ig_account_id: t.ig_account_id ?? null, type: t.type, config: t.config, priority: t.priority ?? 0, enabled: t.enabled ?? true };
 }
 
-function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<Trigger>; flows: { id: string; name: string }[]; onClose: () => void; onSaved: () => void }) {
+function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<Trigger>; flows: { id: string; name: string }[]; onClose: () => void; onSaved: (msg?: string) => void }) {
   const [t, setT] = useState<Partial<Trigger>>({ ...initial, flow_id: initial.flow_id ?? flows[0]?.id });
   const [kw, setKw] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
+  const [schedPicker, setSchedPicker] = useState(false);
+  const [scheduled, setScheduled] = useState<Post | null>(null); // post agendado (ainda sem media_id)
   const c = t.config ?? {};
   const setC = (patch: any) => setT({ ...t, config: { ...c, ...patch } });
 
@@ -179,6 +236,23 @@ function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<T
     try {
       const cfg = { ...c };
       if (kw.trim()) cfg.keywords = [...(cfg.keywords ?? []), kw.trim()];
+      if (scheduled && t.type === 'comment') {
+        // Fica guardado no post; vira gatilho quando ele for publicado
+        await api(`/app/posts/${scheduled.id}/automation`, {
+          method: 'PUT',
+          body: {
+            automation: {
+              flow_id: t.flow_id,
+              keywords: cfg.keywords ?? [],
+              match: cfg.match ?? 'contains',
+              public_replies: (cfg.public_replies ?? []).map((r: string) => r.trim()).filter(Boolean),
+              once_per_contact: Boolean(cfg.once_per_contact),
+            },
+          },
+        });
+        onSaved('Automação salva — o gatilho é criado quando o post sair');
+        return;
+      }
       const body = pick({ ...t, config: cfg });
       if (t.id) await api(`/app/triggers/${t.id}`, { method: 'PUT', body });
       else await api('/app/triggers', { body });
@@ -244,17 +318,35 @@ function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<T
             {t.type === 'comment' && (
               <div className="field">
                 <label className="label">Em qual post?</label>
-                <div className="row">
-                  <span className="badge">{c.media_id ? `Post ${String(c.media_id).slice(-6)}` : 'Qualquer post ou reel'}</span>
+                <div className="row wrap">
+                  <span className="badge">
+                    {scheduled
+                      ? `Agendado: ${postTitle(scheduled)} (${formatDateTime(scheduled.scheduled_at)})`
+                      : c.media_id
+                        ? `Post ${String(c.media_id).slice(-6)}`
+                        : 'Qualquer post ou reel'}
+                  </span>
                   <button className="btn btn-sm" onClick={() => setPicker(true)}>
-                    Escolher post
+                    Post publicado
                   </button>
-                  {c.media_id && (
-                    <button className="btn btn-sm btn-ghost" onClick={() => setC({ media_id: null })}>
+                  {!t.id && (
+                    <button className="btn btn-sm" onClick={() => setSchedPicker(true)}>
+                      Post agendado
+                    </button>
+                  )}
+                  {(c.media_id || scheduled) && (
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => {
+                        setScheduled(null);
+                        setC({ media_id: null });
+                      }}
+                    >
                       Qualquer post
                     </button>
                   )}
                 </div>
+                {scheduled && <span className="hint">A automação fica guardada no post e vira gatilho assim que ele for publicado.</span>}
               </div>
             )}
             <div className="field">
@@ -339,7 +431,17 @@ function TriggerModal({ initial, flows, onClose, onSaved }: { initial: Partial<T
         {error && <div className="alert alert-danger">{error}</div>}
       </div>
 
-      {picker && <MediaPicker onClose={() => setPicker(false)} onPick={(id) => (setC({ media_id: id }), setPicker(false))} selected={c.media_id} />}
+      {picker && <MediaPicker onClose={() => setPicker(false)} onPick={(id) => (setScheduled(null), setC({ media_id: id }), setPicker(false))} selected={c.media_id} />}
+      {schedPicker && (
+        <ScheduledPicker
+          onClose={() => setSchedPicker(false)}
+          onPick={(p) => {
+            setScheduled(p);
+            setC({ media_id: null });
+            setSchedPicker(false);
+          }}
+        />
+      )}
     </Modal>
   );
 }
@@ -368,6 +470,40 @@ function MediaPicker({ onClose, onPick, selected }: { onClose: () => void; onPic
             ))}
           </div>
         </>
+      )}
+    </Modal>
+  );
+}
+
+function ScheduledPicker({ onClose, onPick }: { onClose: () => void; onPick: (p: Post) => void }) {
+  const posts = useLoad(() => api<Post[]>('/app/posts'), []);
+  const list = (posts.data ?? []).filter(isEditable).sort((a, b) => postDate(a).getTime() - postDate(b).getTime());
+  return (
+    <Modal title="Escolher post agendado" onClose={onClose} wide>
+      {posts.loading && !posts.data ? (
+        <Loading />
+      ) : !list.length ? (
+        <Empty title="Nenhum post agendado" text="Agende um post ou Reels em Publicações para ligar uma automação a ele." action={<Link className="btn btn-primary" to="/publicacoes">Ir para Publicações</Link>} />
+      ) : (
+        <div className="stack-sm">
+          <ErrorBox error={posts.error} />
+          {list.map((p) => (
+            <button key={p.id} className="pick-row" onClick={() => onPick(p)}>
+              {p.media[0]?.kind === 'video' ? (
+                <video src={`${p.media[0].url}#t=0.5`} muted preload="metadata" />
+              ) : (
+                <img src={p.media[0]?.url} alt="" />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 550 }}>{postTitle(p)}</div>
+                <div className="muted small">
+                  {p.media_type === 'REELS' ? 'Reels' : 'Imagem'} · @{p.username} · {formatDateTime(p.scheduled_at)} · {POST_STATUS[p.status].label}
+                  {p.automation ? ` · já tem automação (${p.flow_name ?? 'fluxo'}) — será substituída` : ''}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
       )}
     </Modal>
   );
