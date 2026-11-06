@@ -23,40 +23,15 @@
           "quick_replies": [
             {
               "label": "Comprar",
-              "next": "o1"
+              "next": "bairro"
             },
             {
               "label": "Alugar",
-              "next": "o2"
+              "next": "bairro"
             }
-          ]
+          ],
+          "save_to": "objetivo"
         }
-      },
-      "o1": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "objetivo",
-              "value": "Comprar"
-            }
-          ]
-        },
-        "next": "bairro"
-      },
-      "o2": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "objetivo",
-              "value": "Alugar"
-            }
-          ]
-        },
-        "next": "bairro"
       },
       "bairro": {
         "type": "ask",

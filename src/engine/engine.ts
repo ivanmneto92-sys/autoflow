@@ -290,13 +290,21 @@ export class Engine {
     const node = version.graph.nodes[p.nodeId];
     if (!node) return false;
 
-    // Botão do bloco "Só seguidores": volta ao bloco, que agora consegue conferir (a pessoa interagiu)
-    if (p.type === 'gate') {
-      if (node.type !== 'follow_gate') return false;
-      await store.logEvent({ workspaceId: account.workspaceId, contactId: contact.id, flowId: version.flowId, nodeId: p.nodeId, type: 'gate_clicked' });
+    // Botão 🔒 (ou bloco "Só seguidores"): volta ao nó, que agora consegue conferir se segue (a pessoa interagiu)
+    if (p.type === 'gate' || p.type === 'lock') {
+      if (p.type === 'gate' ? node.type !== 'follow_gate' : node.type !== 'message' || !node.data.buttons?.[p.index]) return false;
+      const flag = p.type === 'gate' ? { __gate: p.nodeId } : { __lock: { node: p.nodeId, i: p.index } };
+      await store.logEvent({
+        workspaceId: account.workspaceId,
+        contactId: contact.id,
+        flowId: version.flowId,
+        nodeId: p.nodeId,
+        type: p.type === 'gate' ? 'gate_clicked' : 'button_clicked',
+        data: p.type === 'lock' ? { index: p.index, locked: true } : undefined,
+      });
       const active = await store.getActiveSession(contact.id);
       if (active && active.flowVersionId === version.id) {
-        active.vars.__gate = p.nodeId;
+        Object.assign(active.vars, flag);
         await this.continueSession(account, contact, active, p.nodeId, { lastText: text });
       } else {
         await store.cancelActiveSessions(contact.id);
@@ -307,7 +315,7 @@ export class Engine {
           flowVersionId: version.id,
           status: 'running',
           currentNodeId: p.nodeId,
-          vars: { __last_text: text, __new: created, __gate: p.nodeId },
+          vars: { __last_text: text, __new: created, ...flag },
           waitToken: null,
         });
         await this.run(this.makeCtx(account, contact, session, version), p.nodeId, 0);
@@ -319,6 +327,12 @@ export class Engine {
     if (p.type === 'button' && node.type === 'message') target = node.data.buttons?.[p.index]?.next;
     if (p.type === 'quick_reply' && node.type === 'message') target = node.data.quick_replies?.[p.index]?.next;
     if (p.type === 'card_button' && node.type === 'carousel') target = node.data.cards[p.card]?.buttons?.[p.index]?.next;
+
+    // "Salvar a opção no campo": guarda o texto do botão/resposta tocada
+    if (node.type === 'message' && node.data.save_to && (p.type === 'button' || p.type === 'quick_reply')) {
+      const label = (p.type === 'button' ? node.data.buttons?.[p.index] : node.data.quick_replies?.[p.index])?.label;
+      if (label) await store.setField(contact.id, node.data.save_to, label);
+    }
 
     await store.logEvent({
       workspaceId: account.workspaceId,

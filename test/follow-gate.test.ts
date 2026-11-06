@@ -75,7 +75,7 @@ describe('avisos de fluxo que trava', () => {
     expect(msgs.some((m) => m.startsWith('m: Botão "CLIQUE AQUI" não está ligado'))).toBe(true);
     expect(msgs.some((m) => m.startsWith('c: O caminho "Se…"'))).toBe(true);
     expect(msgs.some((m) => m.startsWith('c: O caminho "Senão"'))).toBe(true);
-    expect(msgs.some((m) => m.includes('Só seguidores'))).toBe(true);
+    expect(msgs.some((m) => m.includes('Só para seguidores'))).toBe(true);
     expect(immediateFromStart(stuck)).toEqual(['m', 'c']);
   });
 
@@ -90,5 +90,95 @@ describe('avisos de fluxo que trava', () => {
       },
     };
     expect(validateGraph(ok).issues).toEqual([]);
+  });
+});
+
+describe('botão 🔒 Só para seguidores (direto na mensagem)', () => {
+  // Exatamente o fluxo do Ivan: comentou CANVA → 1 mensagem com o conteúdo e o botão
+  const canva: FlowGraph = {
+    start: 'm',
+    nodes: {
+      m: {
+        type: 'message',
+        data: {
+          text: 'Obrigado por comentar! Seu material está aqui 👇',
+          buttons: [{ label: 'Receber material', url: 'https://canva.com/guia', followers_only: true }],
+        },
+      },
+    },
+  };
+
+  it('quem não segue recebe o aviso; depois de seguir, "Já sigo" libera o link', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow(canva);
+    t.addTrigger(flowId, 'comment', { keywords: ['canva'], match: 'contains', public_replies: ['Te chamei no direct!'], once_per_contact: false });
+
+    await t.engine.handleEvent(comment('CANVA'));
+    expect(t.ig.publicReplies).toHaveLength(1);
+    const first = t.ig.sent[0]!.msg;
+    expect(textOf(first)).toBe('Obrigado por comentar! Seu material está aqui 👇');
+    // O link não vai aberto: vira um botão que confere antes
+    expect(first.kind === 'buttons' && first.buttons[0]).toMatchObject({ type: 'postback', title: 'Receber material' });
+    expect(parsePayload(firstPostback(first as never))).toMatchObject({ type: 'lock', nodeId: 'm', index: 0 });
+
+    await t.engine.handleEvent(postback(firstPostback(first as never), 'user-1', 'Receber material'));
+    const locked = t.ig.sent[1]!.msg;
+    expect(textOf(locked)).toContain('exclusivo para quem me segue');
+    expect(locked.kind === 'buttons' && locked.buttons.map((b) => b.title)).toEqual(['Já sigo', 'Abrir perfil']);
+
+    t.ig.followers.add('user-1');
+    await t.engine.handleEvent(postback(firstPostback(locked as never), 'user-1', 'Já sigo'));
+    const open = t.ig.sent[2]!.msg;
+    expect(textOf(open)).toContain('obrigado por me seguir');
+    expect(open.kind === 'buttons' && open.buttons[0]).toMatchObject({ type: 'web_url', title: 'Receber material', url: 'https://canva.com/guia' });
+  });
+
+  it('quem já segue toca e recebe o link na hora', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow(canva);
+    t.addTrigger(flowId, 'comment', { keywords: ['canva'], match: 'contains', public_replies: [], once_per_contact: false });
+    t.ig.followers.add('user-2');
+    await t.engine.handleEvent(comment('canva', 'user-2'));
+    await t.engine.handleEvent(postback(firstPostback(t.ig.sent[0]!.msg as never), 'user-2', 'Receber material'));
+    expect(t.ig.sent).toHaveLength(2);
+    expect(t.ig.sent[1]!.msg.kind === 'buttons' && t.ig.sent[1]!.msg.buttons[0]!.type).toBe('web_url');
+  });
+
+  it('botão 🔒 que continua o fluxo: só segue para quem segue', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow({
+      start: 'm',
+      nodes: {
+        m: { type: 'message', data: { text: 'Quer o cupom?', buttons: [{ label: 'Quero', next: 'c', followers_only: true }] } },
+        c: { type: 'message', data: { text: 'Cupom: SEGUIDOR10' } },
+      },
+    });
+    t.addTrigger(flowId, 'dm_keyword', { keywords: ['cupom'] });
+    await t.engine.handleEvent(dm('cupom', 'user-3'));
+    const pb = firstPostback(t.ig.sent[0]!.msg as never);
+    await t.engine.handleEvent(postback(pb, 'user-3', 'Quero'));
+    expect(textOf(t.ig.sent[1]!.msg)).toContain('exclusivo');
+    t.ig.followers.add('user-3');
+    await t.engine.handleEvent(postback(pb, 'user-3', 'Quero'));
+    expect(textOf(t.ig.sent[2]!.msg)).toBe('Cupom: SEGUIDOR10');
+  });
+});
+
+describe('mensagem: salvar a opção tocada num campo', () => {
+  it('guarda o texto da resposta rápida sem precisar de nó de Ação', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow({
+      start: 'm',
+      nodes: {
+        m: { type: 'message', data: { text: 'Qual área?', save_to: 'area', quick_replies: [{ label: 'Trabalhista', next: 'f' }, { label: 'Família', next: 'f' }] } },
+        f: { type: 'message', data: { text: 'Área: {{field.area}}' } },
+      },
+    });
+    t.addTrigger(flowId, 'dm_keyword', { keywords: ['oi'] });
+    await t.engine.handleEvent(dm('oi'));
+    const m = t.ig.sent[0]!.msg;
+    const qrPayload = m.kind === 'text' ? m.quickReplies![1]!.payload : '';
+    await t.engine.handleEvent(dm('Família', 'user-1', qrPayload));
+    expect(textOf(t.ig.sent[1]!.msg)).toBe('Área: Família');
   });
 });

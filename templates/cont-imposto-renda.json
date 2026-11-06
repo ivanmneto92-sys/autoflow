@@ -53,40 +53,15 @@
           "quick_replies": [
             {
               "label": "Sim",
-              "next": "s"
+              "next": "registra"
             },
             {
               "label": "Não, é a 1ª vez",
-              "next": "n"
+              "next": "registra"
             }
-          ]
+          ],
+          "save_to": "ja_declarou"
         }
-      },
-      "s": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "ja_declarou",
-              "value": "Sim"
-            }
-          ]
-        },
-        "next": "registra"
-      },
-      "n": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "ja_declarou",
-              "value": "Primeira vez"
-            }
-          ]
-        },
-        "next": "registra"
       },
       "registra": {
         "type": "action",

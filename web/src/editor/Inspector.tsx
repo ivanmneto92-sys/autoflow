@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
-import type { FlowNode } from '../shared/schema';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Icon, useLoad } from '../components/ui';
-import { api } from '../lib/api';
+import { Icon, useLoad, useToast } from '../components/ui';
+import { api, apiUpload } from '../lib/api';
+import { prepareImage } from '../pages/Posts';
+import { LOCK_DEFAULTS, type FlowNode } from '../shared/schema';
 import { NODE_META } from './graph';
 
 type Props = {
@@ -87,8 +88,8 @@ export function Inspector({ id, node, isStart, flows, onChange, onDelete, onMake
         {node.type === 'message' && <MessageForm node={node} set={set} />}
 
         {node.type === 'image' && (
-          <Field label="URL da imagem" hint="Link público de uma imagem JPG ou PNG.">
-            <input className="input" value={node.data.url} onChange={(e) => set((d) => (d.url = e.target.value))} />
+          <Field label="Foto" hint="Envie do computador ou cole um link público (JPG/PNG).">
+            <ImagePicker value={node.data.url} onChange={(url) => set((d) => (d.url = url))} />
           </Field>
         )}
 
@@ -281,8 +282,37 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
               )}
             </div>
             {b.url !== undefined && /^https:\/\/wa\.me\//.test(b.url) && <WhatsAppButton url={b.url} onChange={(url) => set((d) => (d.buttons[i].url = url))} />}
+            <label className="checkbox small" style={{ marginTop: 6 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(b.followers_only)}
+                onChange={(e) =>
+                  set((d) => {
+                    if (e.target.checked) d.buttons[i].followers_only = true;
+                    else delete d.buttons[i].followers_only;
+                  })
+                }
+              />
+              🔒 Só para seguidores
+            </label>
           </div>
         ))}
+      {mode === 'buttons' && node.data.buttons!.some((b) => b.followers_only) && (
+        <div className="card stack-sm" style={{ padding: 10, background: 'var(--surface-2)' }}>
+          <div className="small">
+            <b>🔒 Como funciona:</b> ao tocar, o robô confere se a pessoa segue. Quem segue {node.data.buttons!.some((b) => b.followers_only && b.url) ? 'recebe o link' : 'segue o fluxo'} na hora; quem não segue recebe a
+            mensagem abaixo com os botões <b>{LOCK_DEFAULTS.retry}</b> e <b>Abrir perfil</b>.
+          </div>
+          <Field label="Mensagem para quem não segue">
+            <TextArea value={node.data.locked_text ?? LOCK_DEFAULTS.locked_text} onChange={(v) => set((d) => (d.locked_text = v))} />
+          </Field>
+          {node.data.buttons!.some((b) => b.followers_only && b.url) && (
+            <Field label="Mensagem junto com o link liberado">
+              <TextArea value={node.data.unlocked_text ?? LOCK_DEFAULTS.unlocked_text} onChange={(v) => set((d) => (d.unlocked_text = v))} />
+            </Field>
+          )}
+        </div>
+      )}
       {mode === 'buttons' && node.data.buttons!.length < 3 && (
         <button className="btn btn-sm" onClick={() => set((d) => d.buttons.push({ label: `Opção ${d.buttons.length + 1}`, next: null }))}>
           <Icon name="plus" /> Botão
@@ -302,9 +332,25 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
           <Icon name="plus" /> Resposta rápida
         </button>
       )}
+      {mode !== 'none' && (node.data.quick_replies?.length || node.data.buttons?.some((b) => b.url === undefined)) ? (
+        <Field label="Salvar a opção escolhida no campo (opcional)" hint={node.data.save_to ? <>Fica em <span className="mono">{`{{field.${node.data.save_to}}}`}</span> — sem precisar de uma Ação para cada opção.</> : 'Ex.: area, interesse, tamanho.'}>
+          <input
+            className="input mono"
+            value={node.data.save_to ?? ''}
+            placeholder="ex.: interesse"
+            onChange={(e) =>
+              set((d) => {
+                const v = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+                if (v) d.save_to = v;
+                else delete d.save_to;
+              })
+            }
+          />
+        </Field>
+      ) : null}
       {mode !== 'none' && (
         <p className="hint">
-          Cada opção vira uma saída no nó. Ligue cada uma ao próximo passo. Numa resposta a comentário, coloque botões na 1ª mensagem: o Instagram só libera mais mensagens depois que o cliente interage.
+          Cada opção que continua o fluxo vira uma saída no nó — ligue cada uma ao próximo passo. Em resposta a comentário, a Meta só libera a 2ª mensagem depois que a pessoa toca num botão ou responde.
         </p>
       )}
     </>
@@ -326,7 +372,7 @@ function CarouselForm({ node, set }: { node: Extract<FlowNode, { type: 'carousel
           </div>
           <input className="input" placeholder="Título" maxLength={80} value={c.title} onChange={(e) => set((d) => (d.cards[ci].title = e.target.value))} />
           <input className="input" placeholder="Subtítulo (opcional)" maxLength={80} value={c.subtitle ?? ''} onChange={(e) => set((d) => (d.cards[ci].subtitle = e.target.value || undefined))} />
-          <input className="input" placeholder="URL da imagem (opcional)" value={c.image_url ?? ''} onChange={(e) => set((d) => (d.cards[ci].image_url = e.target.value || undefined))} />
+          <ImagePicker optional value={c.image_url ?? ''} onChange={(url) => set((d) => (d.cards[ci].image_url = url || undefined))} />
           {(c.buttons ?? []).map((b, i) => (
             <div className="row" key={i}>
               <input className="input" value={b.label} maxLength={20} onChange={(e) => set((d) => (d.cards[ci].buttons[i].label = e.target.value))} />
@@ -681,5 +727,38 @@ function ChargeForm({ node, set }: { node: Extract<FlowNode, { type: 'charge' }>
         como pago na página Pedidos. Conecte a conta de Pix em <b>Configurações</b>.
       </p>
     </>
+  );
+}
+
+/** Foto: enviar do computador (vira JPG no formato do feed) ou colar um link. */
+function ImagePicker({ value, onChange, optional }: { value: string; onChange: (url: string) => void; optional?: boolean }) {
+  const toast = useToast();
+  const [progress, setProgress] = useState<number | null>(null);
+  async function pick(file?: File) {
+    if (!file) return;
+    try {
+      if (!file.type.startsWith('image/')) throw new Error('Escolha uma imagem (JPG ou PNG).');
+      const { blob } = await prepareImage(file);
+      setProgress(0);
+      const up = await apiUpload(blob, setProgress);
+      onChange(up.url);
+    } catch (e) {
+      toast((e as Error).message, true);
+    } finally {
+      setProgress(null);
+    }
+  }
+  const shown = value && /^https?:\/\/.+\..+/.test(value) ? value : '';
+  return (
+    <div className="stack-sm">
+      <div className="row">
+        {shown && <img src={shown} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flex: 'none' }} />}
+        <label className="btn btn-sm" style={{ flex: 'none' }}>
+          <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} disabled={progress !== null} />
+          <Icon name="upload" size={15} /> {progress !== null ? `Enviando… ${Math.round(progress * 100)}%` : shown ? 'Trocar foto' : 'Enviar foto'}
+        </label>
+      </div>
+      <input className="input" placeholder={optional ? 'ou cole o link da imagem (opcional)' : 'ou cole o link da imagem'} value={value === 'https://' ? '' : value} onChange={(e) => onChange(e.target.value)} />
+    </div>
   );
 }

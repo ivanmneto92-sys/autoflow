@@ -34,9 +34,14 @@
       "abre": {
         "type": "message",
         "data": {
-          "text": "Oi, {{first_name|tudo bem}}! 👋 Que bom que você quer saber mais. Pra te mandar [[oferta]], preciso de 3 informações rapidinho:"
-        },
-        "next": "nome"
+          "text": "Oi, {{first_name|tudo bem}}! 👋 Que bom que você quer saber mais. Pra te mandar [[oferta]], preciso de 3 informações rapidinho. Bora?",
+          "buttons": [
+            {
+              "label": "Bora!",
+              "next": "nome"
+            }
+          ]
+        }
       },
       "nome": {
         "type": "ask",

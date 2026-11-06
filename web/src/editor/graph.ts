@@ -8,8 +8,8 @@ export type NodeType = FlowNode['type'];
 export const START_ID = '__start';
 
 export const NODE_META: Record<NodeType, { label: string; color: string; icon: string; hint: string }> = {
-  message: { label: 'Mensagem', color: '#5b5bd6', icon: '💬', hint: 'Texto com botões ou respostas rápidas' },
-  image: { label: 'Imagem', color: '#0ea5e9', icon: '🖼', hint: 'Envia uma imagem por URL' },
+  message: { label: 'Mensagem', color: '#5b5bd6', icon: '💬', hint: 'Texto com botões (🔒 só seguidores), links ou respostas rápidas' },
+  image: { label: 'Imagem', color: '#0ea5e9', icon: '🖼', hint: 'Envia uma foto (do computador ou por link)' },
   carousel: { label: 'Carrossel', color: '#06b6d4', icon: '🗂', hint: 'Cartões com foto e botões' },
   ask: { label: 'Pergunta', color: '#f59e0b', icon: '❓', hint: 'Espera a resposta e salva num campo' },
   condition: { label: 'Condição', color: '#8b5cf6', icon: '🔀', hint: 'Divide o caminho por regras' },
@@ -22,7 +22,14 @@ export const NODE_META: Record<NodeType, { label: string; color: string; icon: s
   end: { label: 'Fim', color: '#94a3b8', icon: '■', hint: 'Encerra o fluxo' },
 };
 
-export const PALETTE: NodeType[] = ['message', 'ask', 'follow_gate', 'condition', 'action', 'charge', 'delay', 'image', 'carousel', 'randomizer', 'goto_flow', 'end'];
+/** Paleta do editor, por grupo. "Só seguidores" e "Fim" seguem funcionando nos fluxos antigos, mas não aparecem mais:
+ *  o 🔒 agora é uma opção do botão e um passo sem saída já encerra o fluxo. */
+export const PALETTE_GROUPS: { label: string; types: NodeType[] }[] = [
+  { label: 'Conversar', types: ['message', 'ask', 'image', 'carousel'] },
+  { label: 'Decidir', types: ['condition', 'delay', 'randomizer', 'goto_flow'] },
+  { label: 'Fazer', types: ['action', 'charge'] },
+];
+export const PALETTE: NodeType[] = PALETTE_GROUPS.flatMap((g) => g.types);
 
 export function newNode(type: NodeType): FlowNode {
   switch (type) {
@@ -87,10 +94,10 @@ export function outputsOf(node: FlowNode): Output[] {
     case 'message': {
       const outs: Output[] = [];
       (node.data.buttons ?? []).forEach((b, i) => {
-        if (!b.url) outs.push({ id: `btn-${i}`, label: `🔘 ${b.label}`, target: b.next });
+        if (!b.url) outs.push({ id: `btn-${i}`, label: `${b.followers_only ? '🔒' : '🔘'} ${b.label}`, target: b.next });
       });
       (node.data.quick_replies ?? []).forEach((q, i) => outs.push({ id: `qr-${i}`, label: `⚡ ${q.label}`, target: q.next }));
-      outs.push({ id: 'next', label: outs.length ? 'Depois (sem esperar clique)' : 'Próximo', target: node.next });
+      outs.push({ id: 'next', label: outs.length || node.data.buttons?.length ? 'Seguir sem esperar o toque' : 'Próximo', target: node.next });
       return outs;
     }
     case 'carousel': {

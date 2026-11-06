@@ -29,12 +29,24 @@
     }
   ],
   "flow": {
-    "start": "envia",
+    "start": "abre",
     "nodes": {
+      "abre": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🎥 Sua aula gratuita está pronta. Toque no botão para receber o acesso 👇",
+          "buttons": [
+            {
+              "label": "Receber a aula",
+              "next": "envia"
+            }
+          ]
+        }
+      },
       "envia": {
         "type": "message",
         "data": {
-          "text": "Oi, {{first_name|tudo bem}}! 🎥 Aqui está sua aula gratuita:",
+          "text": "Aqui está! Bons estudos 📚",
           "buttons": [
             {
               "label": "Assistir agora",

@@ -4,7 +4,7 @@
  *   2. adicione um `case` aqui retornando um NodeResult
  */
 import type { Condition, FlowAction, FlowNode } from '../flow/schema.js';
-import { payload } from '../flow/schema.js';
+import { LOCK_DEFAULTS, payload } from '../flow/schema.js';
 import type { Button } from '../instagram/client.js';
 import { isOpen } from '../lib/businessHours.js';
 import { matchAny, normalize } from '../lib/text.js';
@@ -61,12 +61,14 @@ export async function renderUrl(ctx: RunContext, url: string): Promise<string> {
 async function toButtons(
   ctx: RunContext,
   nodeId: string,
-  buttons: { label: string; next?: string | null; url?: string }[],
+  buttons: { label: string; next?: string | null; url?: string; followers_only?: boolean }[],
   card?: number,
 ): Promise<Button[]> {
   const urls = await Promise.all(buttons.map((b) => (b.url ? renderUrl(ctx, b.url) : Promise.resolve(undefined))));
   return buttons.map((b, i) =>
-    b.url
+    b.followers_only && card === undefined
+      ? { type: 'postback', title: b.label, payload: payload.lock(ctx.version.id, nodeId, i) } // confere antes de liberar
+      : b.url
       ? { type: 'web_url', title: b.label, url: urls[i]! }
       : {
           type: 'postback',
@@ -82,6 +84,12 @@ async function toButtons(
 export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNode): Promise<NodeResult> {
   switch (node.type) {
     case 'message': {
+      // Voltou aqui pelo toque num botão 🔒: confere se segue e libera (ou pede para seguir)
+      const lock = ctx.session.vars.__lock as { node: string; i: number } | undefined;
+      if (lock?.node === nodeId) {
+        delete ctx.session.vars.__lock;
+        return unlockButton(ctx, nodeId, node, lock.i);
+      }
       const text = await render(ctx, node.data.text);
       if (node.data.buttons?.length) {
         await ctx.send({ kind: 'buttons', text, buttons: await toButtons(ctx, nodeId, node.data.buttons) }, nodeId);
@@ -432,4 +440,32 @@ async function checkFollower(ctx: RunContext): Promise<boolean | null> {
     });
     return null;
   }
+}
+
+/** Toque num botão 🔒: quem segue recebe o link (ou segue o fluxo); quem não segue recebe o pedido para seguir. */
+async function unlockButton(ctx: RunContext, nodeId: string, node: Extract<FlowNode, { type: 'message' }>, i: number): Promise<NodeResult> {
+  const b = node.data.buttons?.[i];
+  if (!b) return { type: 'next', next: null };
+  const follows = await checkFollower(ctx);
+  if (follows === false) {
+    ctx.session.vars.is_follower = 'nao';
+    const buttons: Button[] = [{ type: 'postback', title: LOCK_DEFAULTS.retry, payload: payload.lock(ctx.version.id, nodeId, i) }];
+    if (ctx.account.username) buttons.push({ type: 'web_url', title: 'Abrir perfil', url: `https://www.instagram.com/${ctx.account.username}/` });
+    await ctx.send({ kind: 'buttons', text: await render(ctx, node.data.locked_text || LOCK_DEFAULTS.locked_text), buttons }, nodeId);
+    return { type: 'next', next: null };
+  }
+  // Segue (ou a Meta não respondeu: não prende o cliente — fica registrado em follow_check_failed)
+  ctx.session.vars.is_follower = follows ? 'sim' : 'desconhecido';
+  if (b.url) {
+    await ctx.send(
+      {
+        kind: 'buttons',
+        text: await render(ctx, node.data.unlocked_text || LOCK_DEFAULTS.unlocked_text),
+        buttons: [{ type: 'web_url', title: b.label, url: await renderUrl(ctx, b.url) }],
+      },
+      nodeId,
+    );
+    return { type: 'next', next: null };
+  }
+  return { type: 'next', next: b.next };
 }

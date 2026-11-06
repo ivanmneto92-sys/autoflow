@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyTemplate, loadTemplates, TEMPLATE_CATEGORIES, TemplateInputError, templatePreview } from '../src/flow/templates.js';
 import { parseTriggerConfig } from '../src/flow/triggers.js';
+import { immediateFromStart, SENDS_MESSAGE, validateGraph } from '../src/flow/schema.js';
 
 const SAMPLE: Record<string, string> = {
   text: 'Exemplo',
@@ -32,6 +33,23 @@ describe('galeria de modelos', () => {
       for (const k of used) expect(t.inputs.some((i) => i.key === k), `${t.id}: [[${k}]] sem pergunta`).toBe(true);
     });
   }
+
+  it('modelos de comentário mandam só 1 mensagem antes de a pessoa tocar/responder (regra da Meta)', () => {
+    for (const t of all.filter((x) => x.triggers.some((tr) => tr.type === 'comment'))) {
+      const answers = Object.fromEntries(t.inputs.map((i) => [i.key, SAMPLE[i.type]!]));
+      const { flow } = applyTemplate(t, answers);
+      const senders = immediateFromStart(flow).filter((n) => SENDS_MESSAGE.has(flow.nodes[n]!.type));
+      expect(senders.length, `${t.id}: ${senders.join(', ')}`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('nenhum modelo tem aviso (botão solto, caminho vazio…)', () => {
+    for (const t of all) {
+      const answers = Object.fromEntries(t.inputs.map((i) => [i.key, SAMPLE[i.type]!]));
+      const { issues } = validateGraph(applyTemplate(t, answers).flow);
+      expect(issues.map((i) => `${i.node}: ${i.message}`), t.id).toEqual([]);
+    }
+  });
 
   it('normaliza link e telefone; cobra campo obrigatório', () => {
     const t = all.find((x) => x.inputs.some((i) => i.type === 'url' && i.required))!;

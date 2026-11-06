@@ -1,6 +1,6 @@
 {
   "name": "Só para seguidores",
-  "description": "Quem comentar recebe o conteúdo só se seguir a conta; quem não segue recebe o passo a passo para seguir e tentar de novo.",
+  "description": "Quem comentar recebe o conteúdo com um botão 🔒: quem segue abre na hora; quem não segue recebe o pedido para seguir e o botão \"Já sigo\".",
   "category": "geral",
   "icon": "🔒",
   "tags": [
@@ -8,56 +8,21 @@
     "comentário"
   ],
   "flow": {
-    "start": "pede_clique",
+    "start": "entrega",
     "nodes": {
-      "pede_clique": {
-        "type": "message",
-        "data": {
-          "text": "Oi, {{first_name|tudo bem}}! 👋 Esse conteúdo é exclusivo para quem me segue. Toca no botão abaixo que eu confiro rapidinho 👇",
-          "buttons": [
-            {
-              "label": "Quero receber",
-              "next": "checa_seguidor"
-            }
-          ]
-        }
-      },
-      "checa_seguidor": {
-        "type": "condition",
-        "data": {
-          "rules": [
-            {
-              "when": {
-                "type": "is_follower"
-              },
-              "next": "entrega"
-            }
-          ],
-          "else": "nao_segue"
-        }
-      },
       "entrega": {
         "type": "message",
         "data": {
-          "text": "Prontinho! 🎉 Obrigado por me seguir. Aqui está o seu acesso:",
+          "text": "Oi, {{first_name|tudo bem}}! 👋 Obrigado por comentar. Aqui está [[conteudo]] 👇",
           "buttons": [
             {
-              "label": "Acessar agora",
-              "url": "https://seusite.com.br"
+              "label": "Receber agora",
+              "url": "[[link]]",
+              "followers_only": true
             }
-          ]
-        }
-      },
-      "nao_segue": {
-        "type": "message",
-        "data": {
-          "text": "Ainda não encontrei você entre os meus seguidores 😕\n\n1️⃣ Abra o meu perfil e toque em Seguir\n2️⃣ Volte aqui e toque no botão abaixo",
-          "buttons": [
-            {
-              "label": "Pronto, já sigo",
-              "next": "checa_seguidor"
-            }
-          ]
+          ],
+          "locked_text": "Esse conteúdo é exclusivo para quem me segue 💜\n\n1️⃣ Toque em \"Abrir perfil\" e siga\n2️⃣ Volte aqui e toque em \"Já sigo\"",
+          "unlocked_text": "Prontinho, obrigado por me seguir! 🎉 Aqui está 👇"
         }
       }
     }
@@ -69,7 +34,7 @@
       "config": {
         "media_id": null,
         "keywords": [
-          "quero"
+          "[[palavra]]"
         ],
         "match": "contains",
         "public_replies": [
@@ -78,6 +43,26 @@
         ],
         "once_per_contact": false
       }
+    }
+  ],
+  "inputs": [
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "QUERO",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "conteudo",
+      "label": "O que a pessoa recebe",
+      "placeholder": "ex.: o guia completo do Canva + Claude"
+    },
+    {
+      "key": "link",
+      "label": "Link do conteúdo",
+      "type": "url",
+      "placeholder": "https://seusite.com.br/material"
     }
   ]
 }

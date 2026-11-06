@@ -14,7 +14,7 @@ import { Link, useParams } from 'react-router-dom';
 import { immediateFromStart, SENDS_MESSAGE, validateGraph, type FlowGraph, type FlowNode, type GraphIssue } from '../shared/schema';
 import { FlowPostsModal } from '../components/FlowPostsModal';
 import { Icon, Loading, useToast } from '../components/ui';
-import { NODE_META, PALETTE, START_ID, autoLayout, newNode, removeNode, setOutput, toCanvas, uniqueId, type NodeType } from '../editor/graph';
+import { NODE_META, PALETTE_GROUPS, START_ID, autoLayout, newNode, removeNode, setOutput, toCanvas, uniqueId, type NodeType } from '../editor/graph';
 import { Inspector } from '../editor/Inspector';
 import { nodeTypes, WhenContext } from '../editor/NodeCard';
 import { isEditable, type Post } from '../lib/posts';
@@ -368,12 +368,20 @@ function EditorInner() {
           <div className="label" style={{ marginBottom: 8 }}>
             Adicionar
           </div>
-          {PALETTE.map((t) => (
-            <div key={t} className="palette-item" onClick={() => addNode(t)} title={NODE_META[t].hint}>
-              <span className="fnode-icon" style={{ background: NODE_META[t].color }}>
-                {NODE_META[t].icon}
-              </span>
-              {NODE_META[t].label}
+          {PALETTE_GROUPS.map((g) => (
+            <div key={g.label} className="palette-group">
+              <div className="palette-group-label">{g.label}</div>
+              {g.types.map((t) => (
+                <div key={t} className="palette-item" onClick={() => addNode(t)} title={NODE_META[t].hint}>
+                  <span className="fnode-icon" style={{ background: NODE_META[t].color }}>
+                    {NODE_META[t].icon}
+                  </span>
+                  <div>
+                    <div>{NODE_META[t].label}</div>
+                    <div className="palette-hint">{NODE_META[t].hint}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
           <p className="hint" style={{ marginTop: 10 }}>

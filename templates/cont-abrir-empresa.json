@@ -23,57 +23,19 @@
           "quick_replies": [
             {
               "label": "MEI",
-              "next": "t1"
+              "next": "atividade"
             },
             {
               "label": "ME/EPP",
-              "next": "t2"
+              "next": "atividade"
             },
             {
               "label": "Ainda não sei",
-              "next": "t3"
+              "next": "atividade"
             }
-          ]
+          ],
+          "save_to": "tipo_empresa"
         }
-      },
-      "t1": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "tipo_empresa",
-              "value": "MEI"
-            }
-          ]
-        },
-        "next": "atividade"
-      },
-      "t2": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "tipo_empresa",
-              "value": "ME/EPP"
-            }
-          ]
-        },
-        "next": "atividade"
-      },
-      "t3": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "tipo_empresa",
-              "value": "A definir"
-            }
-          ]
-        },
-        "next": "atividade"
       },
       "atividade": {
         "type": "ask",

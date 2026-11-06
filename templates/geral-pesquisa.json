@@ -30,36 +30,32 @@
           "quick_replies": [
             {
               "label": "5 😍",
-              "next": "n5"
+              "next": "promotor"
             },
             {
               "label": "4 🙂",
-              "next": "n4"
+              "next": "avaliar"
             },
             {
               "label": "3 😐",
-              "next": "n3"
+              "next": "baixa"
             },
             {
               "label": "2 😕",
-              "next": "n2"
+              "next": "baixa"
             },
             {
               "label": "1 😞",
-              "next": "n1"
+              "next": "baixa"
             }
-          ]
+          ],
+          "save_to": "nota"
         }
       },
-      "n5": {
+      "promotor": {
         "type": "action",
         "data": {
           "actions": [
-            {
-              "type": "set_field",
-              "field": "nota",
-              "value": "5"
-            },
             {
               "type": "add_tag",
               "tag": "promotor"
@@ -68,58 +64,10 @@
         },
         "next": "avaliar"
       },
-      "n4": {
+      "baixa": {
         "type": "action",
         "data": {
           "actions": [
-            {
-              "type": "set_field",
-              "field": "nota",
-              "value": "4"
-            }
-          ]
-        },
-        "next": "avaliar"
-      },
-      "n3": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "nota",
-              "value": "3"
-            }
-          ]
-        },
-        "next": "motivo"
-      },
-      "n2": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "nota",
-              "value": "2"
-            },
-            {
-              "type": "add_tag",
-              "tag": "insatisfeito"
-            }
-          ]
-        },
-        "next": "motivo"
-      },
-      "n1": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "nota",
-              "value": "1"
-            },
             {
               "type": "add_tag",
               "tag": "insatisfeito"

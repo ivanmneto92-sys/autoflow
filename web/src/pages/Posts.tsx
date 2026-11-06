@@ -398,7 +398,7 @@ function Calendar({ posts, onPick, onNew }: { posts: Post[]; onPick: (p: Post) =
  * Converte para JPG e ajusta a proporção. `ratio` força uma proporção exata (carrossel: todos iguais ao 1º item,
  * senão o Instagram corta os outros sozinho).
  */
-async function prepareImage(file: File, ratio?: number): Promise<{ blob: Blob; adjusted: boolean; ratio: number }> {
+export async function prepareImage(file: File, ratio?: number): Promise<{ blob: Blob; adjusted: boolean; ratio: number }> {
   const src = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {

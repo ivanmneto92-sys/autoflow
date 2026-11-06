@@ -14,11 +14,20 @@ const httpUrl = z
   .url('Link inválido')
   .refine((u) => /^https?:\/\/[^\s/:]+\.[^\s/]+/i.test(u), 'Link inválido: confira se não ficou "https://" repetido e se tem o domínio (ex.: https://site.com)');
 
+/** Textos padrão dos botões 🔒 Só para seguidores. */
+export const LOCK_DEFAULTS = {
+  locked_text: 'Esse conteúdo é exclusivo para quem me segue 💜\n\n1️⃣ Toque em "Abrir perfil" e siga\n2️⃣ Volte aqui e toque em "Já sigo"',
+  unlocked_text: 'Prontinho, obrigado por me seguir! 🎉 Aqui está 👇',
+  retry: 'Já sigo',
+};
+
 export const ButtonSchema = z
   .object({
     label: z.string().min(1).max(20),
     next, // botão que continua o fluxo
     url: httpUrl.optional(), // OU botão de link
+    // 🔒 Só para seguidores: ao tocar, confere se a pessoa segue antes de abrir o link / seguir o fluxo
+    followers_only: z.boolean().optional(),
   })
   .refine((b) => !(b.next && b.url), 'Botão não pode ter next e url ao mesmo tempo');
 
@@ -69,6 +78,11 @@ export const NodeSchema = z.discriminatedUnion('type', [
       text: z.string().min(1).max(1000),
       buttons: z.array(ButtonSchema).max(3).optional(),
       quick_replies: z.array(QuickReplySchema).max(13).optional(),
+      // Botões 🔒: o que quem não segue recebe, e o texto que acompanha o link liberado
+      locked_text: z.string().max(1000).optional(),
+      unlocked_text: z.string().max(1000).optional(),
+      // Salva a opção tocada (texto do botão / resposta rápida) neste campo do contato — dispensa um nó de Ação por opção
+      save_to: z.string().regex(/^[a-z0-9_]+$/, 'Nome do campo: letras minúsculas, números e _').optional(),
     }),
     next,
   }),
@@ -291,7 +305,7 @@ export function validateGraph(input: unknown): { graph?: FlowGraph; issues: Grap
         level: 'warning',
         node: id,
         message:
-          'A Meta só deixa conferir se a pessoa segue depois que ela clica num botão ou escreve. Aqui a checagem acontece antes disso e cai sempre no "Senão" — use o bloco 🔒 Só seguidores ou ligue esta condição no botão.',
+          'A Meta só deixa conferir se a pessoa segue depois que ela toca num botão ou escreve. Aqui a checagem acontece antes disso e cai sempre no "Senão" — marque o botão da mensagem como 🔒 Só para seguidores.',
       });
   }
 
@@ -321,6 +335,7 @@ export type ParsedPayload =
   | { type: 'quick_reply'; versionId: string; nodeId: string; index: number }
   | { type: 'trigger'; triggerId: string }
   | { type: 'gate'; versionId: string; nodeId: string }
+  | { type: 'lock'; versionId: string; nodeId: string; index: number }
   | { type: 'custom'; payload: string };
 
 export const payload = {
@@ -328,6 +343,7 @@ export const payload = {
   cardButton: (v: string, n: string, c: number, i: number) => `af:c:${v}:${n}:${c}:${i}`,
   quickReply: (v: string, n: string, i: number) => `af:q:${v}:${n}:${i}`,
   gate: (v: string, n: string) => `af:g:${v}:${n}`,
+  lock: (v: string, n: string, i: number) => `af:l:${v}:${n}:${i}`,
   trigger: (t: string) => `af:t:${t}`,
 };
 
@@ -341,6 +357,7 @@ export function parsePayload(p: string): ParsedPayload {
     if (parts[1] === 'c' && parts.length === 6)
       return { type: 'card_button', versionId: parts[2]!, nodeId: parts[3]!, card: Number(parts[4]), index: Number(parts[5]) };
     if (parts[1] === 't' && parts.length === 3) return { type: 'trigger', triggerId: parts[2]! };
+    if (parts[1] === 'l' && parts.length === 5) return { type: 'lock', versionId: parts[2]!, nodeId: parts[3]!, index: Number(parts[4]) };
     if (parts[1] === 'g' && parts.length === 4) return { type: 'gate', versionId: parts[2]!, nodeId: parts[3]! };
   }
   return { type: 'custom', payload: p };

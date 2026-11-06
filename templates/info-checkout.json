@@ -29,12 +29,24 @@
     }
   ],
   "flow": {
-    "start": "oferta",
+    "start": "abre",
     "nodes": {
+      "abre": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🛒 Separei a oferta pra você. Toque para ver 👇",
+          "buttons": [
+            {
+              "label": "Ver a oferta",
+              "next": "oferta"
+            }
+          ]
+        }
+      },
       "oferta": {
         "type": "message",
         "data": {
-          "text": "Oi, {{first_name|tudo bem}}! 🛒 [[oferta]]",
+          "text": "[[oferta]]",
           "buttons": [
             {
               "label": "Garantir minha vaga",

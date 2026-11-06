@@ -34,74 +34,23 @@
           "quick_replies": [
             {
               "label": "MEI",
-              "next": "r1"
+              "next": "faturamento"
             },
             {
               "label": "Simples Nacional",
-              "next": "r2"
+              "next": "faturamento"
             },
             {
               "label": "Lucro Presumido/Real",
-              "next": "r3"
+              "next": "faturamento"
             },
             {
               "label": "Não sei",
-              "next": "r4"
+              "next": "faturamento"
             }
-          ]
+          ],
+          "save_to": "regime"
         }
-      },
-      "r1": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "regime",
-              "value": "MEI"
-            }
-          ]
-        },
-        "next": "faturamento"
-      },
-      "r2": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "regime",
-              "value": "Simples Nacional"
-            }
-          ]
-        },
-        "next": "faturamento"
-      },
-      "r3": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "regime",
-              "value": "Lucro Presumido/Real"
-            }
-          ]
-        },
-        "next": "faturamento"
-      },
-      "r4": {
-        "type": "action",
-        "data": {
-          "actions": [
-            {
-              "type": "set_field",
-              "field": "regime",
-              "value": "Não sabe"
-            }
-          ]
-        },
-        "next": "faturamento"
       },
       "faturamento": {
         "type": "ask",

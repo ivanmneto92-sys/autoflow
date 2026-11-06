@@ -28,7 +28,9 @@ export function FlowNodeCard({ data, selected }: NodeProps) {
           {node.data.buttons
             .filter((b) => b.url)
             .map((b, i) => (
-              <div key={i}>🔗 {b.label}</div>
+              <div key={i}>
+                {b.followers_only ? '🔒' : '🔗'} {b.label}
+              </div>
             ))}
         </div>
       )}

@@ -36,27 +36,15 @@
       "pede": {
         "type": "message",
         "data": {
-          "text": "Oi, {{first_name|tudo bem}}! 🎉 Pra participar do sorteio de [[premio]], toca no botão que eu confiro se você segue o perfil 👇",
+          "text": "Oi, {{first_name|tudo bem}}! 🎉 Quer participar do sorteio de [[premio]]? Toque no botão 👇",
           "buttons": [
             {
               "label": "Participar",
-              "next": "confere"
-            }
-          ]
-        }
-      },
-      "confere": {
-        "type": "condition",
-        "data": {
-          "rules": [
-            {
-              "when": {
-                "type": "is_follower"
-              },
-              "next": "dentro"
+              "next": "dentro",
+              "followers_only": true
             }
           ],
-          "else": "segue"
+          "locked_text": "Pra participar precisa seguir o perfil 😉\n\n1️⃣ Toque em \"Abrir perfil\" e siga\n2️⃣ Volte aqui e toque em \"Já sigo\""
         }
       },
       "dentro": {
@@ -75,18 +63,6 @@
         "type": "message",
         "data": {
           "text": "Você está participando! 🍀 O resultado sai [[data]]. Boa sorte!"
-        }
-      },
-      "segue": {
-        "type": "message",
-        "data": {
-          "text": "Pra participar precisa seguir o perfil 😉\n\n1️⃣ Toque em Seguir no perfil\n2️⃣ Volte e toque no botão",
-          "buttons": [
-            {
-              "label": "Pronto, já sigo",
-              "next": "confere"
-            }
-          ]
         }
       }
     }

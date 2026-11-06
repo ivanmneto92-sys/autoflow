@@ -47,27 +47,15 @@
       "pede": {
         "type": "message",
         "data": {
-          "text": "Oi, {{first_name|tudo bem}}! 🎟 O cupom de [[desconto]] é exclusivo para quem segue a [[negocio]]. Toca no botão que eu confiro 👇",
+          "text": "Oi, {{first_name|tudo bem}}! 🎟 Separei um cupom de [[desconto]] pra você. Toque no botão para receber 👇",
           "buttons": [
             {
               "label": "Quero meu cupom",
-              "next": "confere"
-            }
-          ]
-        }
-      },
-      "confere": {
-        "type": "condition",
-        "data": {
-          "rules": [
-            {
-              "when": {
-                "type": "is_follower"
-              },
-              "next": "cupom"
+              "next": "cupom",
+              "followers_only": true
             }
           ],
-          "else": "segue"
+          "locked_text": "O cupom é exclusivo para quem segue a [[negocio]] 💜\n\n1️⃣ Toque em \"Abrir perfil\" e siga\n2️⃣ Volte aqui e toque em \"Já sigo\""
         }
       },
       "cupom": {
@@ -78,18 +66,6 @@
             {
               "label": "Usar agora",
               "url": "[[link_compra]]"
-            }
-          ]
-        }
-      },
-      "segue": {
-        "type": "message",
-        "data": {
-          "text": "Ainda não encontrei você entre os seguidores 😕\n\n1️⃣ Abra nosso perfil e toque em Seguir\n2️⃣ Volte aqui e toque no botão",
-          "buttons": [
-            {
-              "label": "Pronto, já sigo",
-              "next": "confere"
             }
           ]
         }

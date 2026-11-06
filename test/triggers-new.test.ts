@@ -92,32 +92,33 @@ describe('gatilho: clique em anúncio', () => {
 });
 
 describe('condição: segue a conta', () => {
-  it('modelo "Só para seguidores": não segue → pede para seguir; segue → entrega', async () => {
-    const { readFileSync } = await import('node:fs');
-    const { validateGraph } = await import('../src/flow/schema.js');
-    const tpl = JSON.parse(readFileSync('templates/seguidores.json', 'utf8'));
-    expect(validateGraph(tpl.flow).issues.filter((i) => i.level === 'error')).toEqual([]);
+  it('modelo "Só para seguidores": 1 mensagem com botão 🔒; não segue → pede para seguir; segue → libera o link', async () => {
+    const { loadTemplates, applyTemplate } = await import('../src/flow/templates.js');
+    const tpl = loadTemplates().find((x) => x.id === 'seguidores')!;
+    const { flow, triggers } = applyTemplate(tpl, { palavra: 'quero', conteudo: 'o guia', link: 'https://site.com/guia' });
 
     const t = setup();
-    const { flowId } = t.addFlow(tpl.flow);
-    for (const tr of tpl.triggers) t.addTrigger(flowId, tr.type, tr.config, tr.priority);
+    const { flowId } = t.addFlow(flow);
+    for (const tr of triggers) t.addTrigger(flowId, tr.type, tr.config, tr.priority);
     const { comment, postback } = await import('./helpers.js');
 
     await t.engine.handleEvent(comment('eu quero!'));
     const first = t.ig.sent[0]!.msg;
-    expect(first.kind).toBe('buttons');
+    expect(textOf(first)).toContain('Aqui está o guia');
     const payload = first.kind === 'buttons' && first.buttons[0]!.type === 'postback' ? first.buttons[0]!.payload : '';
 
     // Ainda não segue
-    await t.engine.handleEvent(postback(payload, 'user-1', 'Quero receber'));
-    expect(textOf(t.ig.sent[1]!.msg)).toContain('Ainda não encontrei você');
+    await t.engine.handleEvent(postback(payload, 'user-1', 'Receber agora'));
+    expect(textOf(t.ig.sent[1]!.msg)).toContain('exclusivo para quem me segue');
     const again = t.ig.sent[1]!.msg;
     const payload2 = again.kind === 'buttons' && again.buttons[0]!.type === 'postback' ? again.buttons[0]!.payload : '';
 
-    // Seguiu e clicou de novo
+    // Seguiu e tocou em "Já sigo"
     t.ig.followers.add('user-1');
-    await t.engine.handleEvent(postback(payload2, 'user-1', 'Pronto, já sigo'));
-    expect(textOf(t.ig.sent[2]!.msg)).toContain('Obrigado por me seguir');
+    await t.engine.handleEvent(postback(payload2, 'user-1', 'Já sigo'));
+    const open = t.ig.sent[2]!.msg;
+    expect(textOf(open)).toContain('obrigado por me seguir');
+    expect(open.kind === 'buttons' && open.buttons[0]).toMatchObject({ type: 'web_url', url: 'https://site.com/guia' });
   });
 
   it('sem consentimento da Meta: trata como "não segue" e registra o motivo', async () => {
