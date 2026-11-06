@@ -86,12 +86,13 @@ async function toButtons(
   nodeId: string,
   buttons: { label: string; next?: string | null; url?: string; followers_only?: boolean; actions?: unknown[] }[],
   card?: number,
+  /** Já sabemos que segue: o 🔒 vira um botão normal (abre o link no 1º toque) */
+  isFollower = false,
 ): Promise<Button[]> {
-  const urls = await Promise.all(
-    buttons.map(async (b) => (b.url && !(b.followers_only && card === undefined) ? trackUrl(ctx, nodeId, await renderUrl(ctx, b.url), b.actions) : undefined)),
-  );
+  const gated = (b: { followers_only?: boolean }) => Boolean(b.followers_only) && card === undefined && !isFollower;
+  const urls = await Promise.all(buttons.map(async (b) => (b.url && !gated(b) ? trackUrl(ctx, nodeId, await renderUrl(ctx, b.url), b.actions) : undefined)));
   return buttons.map((b, i) =>
-    b.followers_only && card === undefined
+    gated(b)
       ? { type: 'postback', title: b.label, payload: payload.lock(ctx.version.id, nodeId, i) } // confere antes de liberar
       : b.url
       ? { type: 'web_url', title: b.label, url: urls[i]! }
@@ -110,15 +111,17 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
   switch (node.type) {
     case 'message': {
       // Voltou aqui pelo toque num botão 🔒: confere se segue e libera (ou pede para seguir)
-      const lock = ctx.session.vars.__lock as { node: string; i: number } | undefined;
+      const lock = ctx.session.vars.__lock as { node: string; i: number; retry?: boolean } | undefined;
       if (lock?.node === nodeId) {
         delete ctx.session.vars.__lock;
-        return unlockButton(ctx, nodeId, node, lock.i);
+        return unlockButton(ctx, nodeId, node, lock.i, Boolean(lock.retry));
       }
       const text = await render(ctx, node.data.text);
       if (node.data.image_url) await ctx.send({ kind: 'image', url: node.data.image_url }, nodeId);
       if (node.data.buttons?.length) {
-        await ctx.send({ kind: 'buttons', text, buttons: await toButtons(ctx, nodeId, node.data.buttons) }, nodeId);
+        // Quem já sabemos que segue recebe o 🔒 como botão normal: 1 toque e abre
+        const isFollower = node.data.buttons.some((b) => b.followers_only) && (await knownFollower(ctx));
+        await ctx.send({ kind: 'buttons', text, buttons: await toButtons(ctx, nodeId, node.data.buttons, undefined, isFollower) }, nodeId);
       } else if (node.data.quick_replies?.length) {
         await ctx.send(
           {
@@ -178,6 +181,7 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
       // A Meta só responde "segue?" depois que a pessoa interage (clique ou mensagem nas últimas 24 h)
       const last = ctx.contact.lastInboundAt?.getTime() ?? 0;
       const interacted = clicked || (!ctx.privateReplyCommentId && ctx.now().getTime() - last < WINDOW_MS);
+      if (!interacted && (await knownFollower(ctx))) return { type: 'next', next: node.next }; // já confirmamos antes
       if (!interacted) {
         await ctx.send({ kind: 'buttons', text: await render(ctx, node.data.text), buttons: [gateButton(node.data.button)] }, nodeId);
         return { type: 'next', next: null }; // continua quando ela tocar no botão
@@ -466,7 +470,10 @@ async function checkFollower(ctx: RunContext): Promise<boolean | null> {
   const { store } = ctx.deps;
   try {
     const token = await store.getAccessToken(ctx.account.id);
-    return await ctx.deps.ig.getFollowStatus(token, ctx.contact.igsid);
+    const follows = await ctx.deps.ig.getFollowStatus(token, ctx.contact.igsid);
+    // Guarda quando confirmamos que segue: da próxima vez o 🔒 abre direto (sem o toque extra)
+    await store.setField(ctx.contact.id, FOLLOWER_FIELD, follows ? ctx.now().toISOString() : '');
+    return follows;
   } catch (err) {
     await store.logEvent({
       workspaceId: ctx.account.workspaceId,
@@ -480,14 +487,30 @@ async function checkFollower(ctx: RunContext): Promise<boolean | null> {
   }
 }
 
+/** Campo do contato com a data da última vez que confirmamos que ele segue a conta. */
+export const FOLLOWER_FIELD = 'seguidor_desde';
+const FOLLOWER_CACHE_MS = 30 * 86_400_000;
+
+/**
+ * Já dá para saber, antes do toque, que a pessoa segue? Sim se confirmamos nos últimos 30 dias, ou se ela já
+ * conversou com a conta nas últimas 24 h (aí a Meta deixa conferir na hora). Quem só comentou: não dá.
+ */
+async function knownFollower(ctx: RunContext): Promise<boolean> {
+  const since = (await ctx.deps.store.getFields(ctx.contact.id))[FOLLOWER_FIELD];
+  if (typeof since === 'string' && since && ctx.now().getTime() - new Date(since).getTime() < FOLLOWER_CACHE_MS) return true;
+  const last = ctx.contact.lastInboundAt?.getTime() ?? 0;
+  if (ctx.privateReplyCommentId || ctx.now().getTime() - last >= WINDOW_MS) return false;
+  return (await checkFollower(ctx)) === true;
+}
+
 /** Toque num botão 🔒: quem segue recebe o link (ou segue o fluxo); quem não segue recebe o pedido para seguir. */
-async function unlockButton(ctx: RunContext, nodeId: string, node: Extract<FlowNode, { type: 'message' }>, i: number): Promise<NodeResult> {
+async function unlockButton(ctx: RunContext, nodeId: string, node: Extract<FlowNode, { type: 'message' }>, i: number, retry: boolean): Promise<NodeResult> {
   const b = node.data.buttons?.[i];
   if (!b) return { type: 'next', next: null };
   const follows = await checkFollower(ctx);
   if (follows === false) {
     ctx.session.vars.is_follower = 'nao';
-    const buttons: Button[] = [{ type: 'postback', title: LOCK_DEFAULTS.retry, payload: payload.lock(ctx.version.id, nodeId, i) }];
+    const buttons: Button[] = [{ type: 'postback', title: LOCK_DEFAULTS.retry, payload: payload.lock(ctx.version.id, nodeId, i, true) }];
     if (ctx.account.username) buttons.push({ type: 'web_url', title: 'Abrir perfil', url: `https://www.instagram.com/${ctx.account.username}/` });
     await ctx.send({ kind: 'buttons', text: await render(ctx, node.data.locked_text || LOCK_DEFAULTS.locked_text), buttons }, nodeId);
     return { type: 'next', next: null };
@@ -498,7 +521,8 @@ async function unlockButton(ctx: RunContext, nodeId: string, node: Extract<FlowN
     await ctx.send(
       {
         kind: 'buttons',
-        text: await render(ctx, node.data.unlocked_text || LOCK_DEFAULTS.unlocked_text),
+        // Acabou de seguir ("Já sigo") → agradece; já seguia → só entrega
+        text: retry ? await render(ctx, node.data.unlocked_text || LOCK_DEFAULTS.unlocked_text) : LOCK_DEFAULTS.ready_text,
         buttons: [{ type: 'web_url', title: b.label, url: await trackUrl(ctx, nodeId, await renderUrl(ctx, b.url), b.actions) }],
       },
       nodeId,

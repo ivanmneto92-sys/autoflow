@@ -17,7 +17,8 @@ const httpUrl = z
 /** Textos padrão dos botões 🔒 Só para seguidores. */
 export const LOCK_DEFAULTS = {
   locked_text: 'Esse conteúdo é exclusivo para quem me segue 💜\n\n1️⃣ Toque em "Abrir perfil" e siga\n2️⃣ Volte aqui e toque em "Já sigo"',
-  unlocked_text: 'Prontinho, obrigado por me seguir! 🎉 Aqui está 👇',
+  unlocked_text: 'Prontinho, obrigado por me seguir! 🎉 Aqui está 👇', // para quem acabou de seguir (tocou em "Já sigo")
+  ready_text: 'Aqui está 👇', // para quem já seguia e tocou no botão pela 1ª vez
   retry: 'Já sigo',
 };
 
@@ -352,7 +353,7 @@ export type ParsedPayload =
   | { type: 'quick_reply'; versionId: string; nodeId: string; index: number }
   | { type: 'trigger'; triggerId: string }
   | { type: 'gate'; versionId: string; nodeId: string }
-  | { type: 'lock'; versionId: string; nodeId: string; index: number }
+  | { type: 'lock'; versionId: string; nodeId: string; index: number; retry: boolean }
   | { type: 'answer'; versionId: string; nodeId: string; index: number }
   | { type: 'skip'; versionId: string; nodeId: string }
   | { type: 'custom'; payload: string };
@@ -362,7 +363,7 @@ export const payload = {
   cardButton: (v: string, n: string, c: number, i: number) => `af:c:${v}:${n}:${c}:${i}`,
   quickReply: (v: string, n: string, i: number) => `af:q:${v}:${n}:${i}`,
   gate: (v: string, n: string) => `af:g:${v}:${n}`,
-  lock: (v: string, n: string, i: number) => `af:l:${v}:${n}:${i}`,
+  lock: (v: string, n: string, i: number, retry = false) => `af:l:${v}:${n}:${i}${retry ? ':r' : ''}`,
   answer: (v: string, n: string, i: number) => `af:a:${v}:${n}:${i}`, // sugestão da Pergunta (vale como resposta digitada)
   skip: (v: string, n: string) => `af:s:${v}:${n}`,
   trigger: (t: string) => `af:t:${t}`,
@@ -380,7 +381,8 @@ export function parsePayload(p: string): ParsedPayload {
     if (parts[1] === 't' && parts.length === 3) return { type: 'trigger', triggerId: parts[2]! };
     if (parts[1] === 'a' && parts.length === 5) return { type: 'answer', versionId: parts[2]!, nodeId: parts[3]!, index: Number(parts[4]) };
     if (parts[1] === 's' && parts.length === 4) return { type: 'skip', versionId: parts[2]!, nodeId: parts[3]! };
-    if (parts[1] === 'l' && parts.length === 5) return { type: 'lock', versionId: parts[2]!, nodeId: parts[3]!, index: Number(parts[4]) };
+    if (parts[1] === 'l' && (parts.length === 5 || parts.length === 6))
+      return { type: 'lock', versionId: parts[2]!, nodeId: parts[3]!, index: Number(parts[4]), retry: parts[5] === 'r' };
     if (parts[1] === 'g' && parts.length === 4) return { type: 'gate', versionId: parts[2]!, nodeId: parts[3]! };
   }
   return { type: 'custom', payload: p };

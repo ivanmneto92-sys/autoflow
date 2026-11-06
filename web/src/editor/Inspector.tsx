@@ -352,14 +352,15 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
       {mode === 'buttons' && node.data.buttons!.some((b) => b.followers_only) && (
         <div className="card stack-sm" style={{ padding: 10, background: 'var(--surface-2)' }}>
           <div className="small">
-            <b>🔒 Como funciona:</b> ao tocar, o robô confere se a pessoa segue. Quem segue {node.data.buttons!.some((b) => b.followers_only && b.url) ? 'recebe o link' : 'segue o fluxo'} na hora; quem não segue recebe a
-            mensagem abaixo com os botões <b>{LOCK_DEFAULTS.retry}</b> e <b>Abrir perfil</b>.
+            <b>🔒 Como funciona:</b> quem já segue e já falou com você (ou foi confirmado antes) recebe o botão normal — abre no 1º toque. Quem só
+            comentou toca uma vez para o robô conferir: se segue, recebe na hora “{LOCK_DEFAULTS.ready_text}” com o link; se não segue, recebe a mensagem abaixo
+            com <b>{LOCK_DEFAULTS.retry}</b> e <b>Abrir perfil</b>.
           </div>
           <Field label="Mensagem para quem não segue">
             <TextArea value={node.data.locked_text ?? LOCK_DEFAULTS.locked_text} onChange={(v) => set((d) => (d.locked_text = v))} />
           </Field>
           {node.data.buttons!.some((b) => b.followers_only && b.url) && (
-            <Field label="Mensagem junto com o link liberado">
+            <Field label="Mensagem para quem acabou de seguir (vai junto com o link)">
               <TextArea value={node.data.unlocked_text ?? LOCK_DEFAULTS.unlocked_text} onChange={(v) => set((d) => (d.unlocked_text = v))} />
             </Field>
           )}

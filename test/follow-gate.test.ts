@@ -182,3 +182,48 @@ describe('mensagem: salvar a opção tocada num campo', () => {
     expect(textOf(t.ig.sent[1]!.msg)).toBe('Área: Família');
   });
 });
+
+describe('🔒 sem passo redundante para quem já segue', () => {
+  const canva: FlowGraph = {
+    start: 'm',
+    nodes: { m: { type: 'message', data: { text: 'Seu material 👇', buttons: [{ label: 'CLIQUE AQUI', url: 'https://site.com/guia', followers_only: true }] } } },
+  };
+  const urlOf = (m: { kind: string; buttons?: { type: string; url?: string }[] }) => (m.kind === 'buttons' ? m.buttons![0] : undefined);
+
+  it('quem já seguia: 1º toque recebe só "Aqui está 👇" + link; da 2ª vez em diante o botão já abre direto', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow(canva);
+    t.addTrigger(flowId, 'comment', { keywords: ['canva'], match: 'contains', public_replies: [], once_per_contact: false });
+    t.ig.followers.add('user-1');
+
+    // 1ª vez (só comentou: a Meta não deixa conferir antes do toque)
+    await t.engine.handleEvent(comment('canva'));
+    expect(urlOf(t.ig.sent[0]!.msg as never)).toMatchObject({ type: 'postback' });
+    await t.engine.handleEvent(postback(firstPostback(t.ig.sent[0]!.msg as never), 'user-1', 'CLIQUE AQUI'));
+    expect(textOf(t.ig.sent[1]!.msg)).toBe('Aqui está 👇');
+
+    // Comenta em outro post depois: já sabemos que segue → link direto no 1º toque
+    await t.engine.handleEvent(comment('canva', 'user-1', 'media-2'));
+    expect(urlOf(t.ig.sent[2]!.msg as never)).toMatchObject({ type: 'web_url', url: 'https://site.com/guia' });
+  });
+
+  it('quem acabou de seguir ("Já sigo") recebe o agradecimento', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow(canva);
+    t.addTrigger(flowId, 'comment', { keywords: ['canva'], match: 'contains', public_replies: [], once_per_contact: false });
+    await t.engine.handleEvent(comment('canva'));
+    await t.engine.handleEvent(postback(firstPostback(t.ig.sent[0]!.msg as never), 'user-1', 'CLIQUE AQUI'));
+    t.ig.followers.add('user-1');
+    await t.engine.handleEvent(postback(firstPostback(t.ig.sent[1]!.msg as never), 'user-1', 'Já sigo'));
+    expect(textOf(t.ig.sent[2]!.msg)).toContain('obrigado por me seguir');
+  });
+
+  it('quem já conversou com a conta (DM) e segue recebe o link direto', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow(canva);
+    t.addTrigger(flowId, 'dm_keyword', { keywords: ['canva'] });
+    t.ig.followers.add('user-5');
+    await t.engine.handleEvent(dm('canva', 'user-5'));
+    expect(urlOf(t.ig.sent[0]!.msg as never)).toMatchObject({ type: 'web_url' });
+  });
+});

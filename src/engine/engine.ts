@@ -308,7 +308,7 @@ export class Engine {
     // Botão 🔒 (ou bloco "Só seguidores"): volta ao nó, que agora consegue conferir se segue (a pessoa interagiu)
     if (p.type === 'gate' || p.type === 'lock') {
       if (p.type === 'gate' ? node.type !== 'follow_gate' : node.type !== 'message' || !node.data.buttons?.[p.index]) return false;
-      const flag = p.type === 'gate' ? { __gate: p.nodeId } : { __lock: { node: p.nodeId, i: p.index } };
+      const flag = p.type === 'gate' ? { __gate: p.nodeId } : { __lock: { node: p.nodeId, i: p.index, retry: p.retry } };
       await store.logEvent({
         workspaceId: account.workspaceId,
         contactId: contact.id,
