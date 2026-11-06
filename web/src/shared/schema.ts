@@ -52,6 +52,8 @@ export const ActionSchema = z.discriminatedUnion('type', [
     fields: z.array(z.string()).default([]), // campos do contato anexados ao pedido (ex.: nome, endereco)
     total: z.string().max(100).optional(), // valor: número ou {{field.total}}
   }),
+  // Entrega um cupom único da campanha (página Cupons). Código em {{var.coupon_code}}; situação em {{var.coupon_status}}
+  z.object({ type: z.literal('give_coupon'), campaign_id: z.string().uuid({ message: 'Escolha a campanha de cupons' }) }),
   z.object({
     type: z.literal('webhook'),
     url: z.string().url(),

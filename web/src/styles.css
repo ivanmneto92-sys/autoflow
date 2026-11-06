@@ -361,3 +361,29 @@ p { margin: 0; }
 @media (max-width: 720px) { .tpl-detail { grid-template-columns: 1fr; } .tpl-cats { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; } }
 .tpl-shortcut { display: flex; align-items: center; gap: 12px; padding: 12px 14px; color: inherit; text-decoration: none; border-style: dashed; }
 .tpl-shortcut:hover { border-color: var(--primary); }
+
+/* Cupons */
+.coupon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.coupon-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; text-align: left; font: inherit; color: inherit; cursor: pointer; border-left: 4px solid var(--primary); transition: border-color 0.15s, box-shadow 0.15s; }
+.coupon-card:hover { box-shadow: 0 6px 18px rgba(20, 24, 40, 0.08); }
+.coupon-discount { font-size: 20px; font-weight: 700; color: var(--primary-strong); }
+.coupon-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.coupon-stats > div { background: var(--surface-2); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; }
+.coupon-stats b { font-size: 18px; }
+.coupon-stats span { font-size: 12px; color: var(--muted); }
+.coupon-result { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px dashed var(--border); border-radius: 10px; background: var(--surface-2); }
+
+/* Carrossel no agendador */
+.carousel-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.carousel-item { position: relative; aspect-ratio: 4 / 5; border-radius: 8px; overflow: hidden; background: #000; cursor: pointer; border: 2px solid transparent; }
+.carousel-item.sel { border-color: var(--primary); }
+.carousel-item img, .carousel-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.carousel-n { position: absolute; top: 4px; left: 4px; background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 11px; font-weight: 700; border-radius: 99px; padding: 1px 7px; }
+.carousel-tools { position: absolute; inset: auto 0 0 0; display: flex; justify-content: space-between; background: linear-gradient(transparent, rgba(0, 0, 0, 0.7)); padding: 10px 3px 3px; opacity: 0; transition: opacity 0.15s; }
+.carousel-item:hover .carousel-tools, .carousel-item.sel .carousel-tools { opacity: 1; }
+.carousel-tools button { background: rgba(255, 255, 255, 0.9); color: #111; border: 0; border-radius: 6px; width: 22px; height: 22px; font-size: 15px; line-height: 1; cursor: pointer; }
+.carousel-tools button:disabled { opacity: 0.35; cursor: default; }
+.post-preview { position: relative; }
+.carousel-nav { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: rgba(0, 0, 0, 0.6); color: #fff; border-radius: 99px; padding: 3px 6px; font-size: 13px; font-weight: 600; }
+.carousel-nav button { background: none; border: 0; color: #fff; font-size: 18px; cursor: pointer; padding: 0 6px; }
+.carousel-nav button:disabled { opacity: 0.3; cursor: default; }

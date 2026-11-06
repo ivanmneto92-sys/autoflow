@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Empty, ErrorBox, Icon, Loading, Modal, useLoad, useToast } from '../components/ui';
 import { api, formatDateTime } from '../lib/api';
-import { describeAutomation, isEditable, POST_STATUS, postDate, postTitle, type Post } from '../lib/posts';
+import { describeAutomation, isEditable, POST_STATUS, postDate, postTitle, TYPE_LABEL, type Post } from '../lib/posts';
 import { useSession } from '../lib/session';
 import { describeTrigger, MATCH, triggerDefaults, TYPES, type TType, type Trigger } from '../lib/triggers';
 
@@ -519,7 +519,7 @@ function ScheduledPicker({ onClose, onPick }: { onClose: () => void; onPick: (p:
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 550 }}>{postTitle(p)}</div>
                 <div className="muted small">
-                  {p.media_type === 'REELS' ? 'Reels' : 'Imagem'} · @{p.username} · {formatDateTime(p.scheduled_at)} · {POST_STATUS[p.status].label}
+                  {TYPE_LABEL[p.media_type]} · @{p.username} · {formatDateTime(p.scheduled_at)} · {POST_STATUS[p.status].label}
                   {p.automation ? ` · já tem automação (${p.flow_name ?? 'fluxo'}) — será substituída` : ''}
                 </div>
               </div>

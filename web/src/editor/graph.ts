@@ -203,6 +203,8 @@ export function describeAction(a: any): string {
       return `🌐 Webhook ${a.method} ${a.url}`;
     case 'create_order':
       return '🧾 Registrar pedido';
+    case 'give_coupon':
+      return '🎟 Entregar cupom único';
     default:
       return a.type;
   }

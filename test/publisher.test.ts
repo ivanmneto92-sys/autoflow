@@ -218,3 +218,44 @@ describe('regras da publicação', () => {
     expect(() => PostInputSchema.parse({ ...base, automation: { flow_id: '00000000-0000-4000-8000-000000000001', keywords: ['  '] } })).toThrow();
   });
 });
+
+describe('carrossel', () => {
+  const deps = (ig: FakePublisher, repo = new MemRepo()) => ({ repo, ig, sleep: async () => {}, pollMs: 0 });
+  const media = [
+    { url: 'https://api.x/media/w/a.jpg', kind: 'image' as const },
+    { url: 'https://api.x/media/w/b.mp4', kind: 'video' as const },
+    { url: 'https://api.x/media/w/c.jpg', kind: 'image' as const },
+  ];
+
+  it('cria um contêiner por item, junta no CAROUSEL com a legenda e publica', async () => {
+    const ig = new FakePublisher();
+    const repo = new MemRepo();
+    expect(await publishPost(deps(ig, repo), post({ media_type: 'CAROUSEL', media, caption: 'Arrasta pro lado 👉' }))).toBe('published');
+    expect(ig.created).toEqual([
+      { image_url: media[0]!.url, is_carousel_item: 'true' },
+      { media_type: 'VIDEO', video_url: media[1]!.url, is_carousel_item: 'true' },
+      { image_url: media[2]!.url, is_carousel_item: 'true' },
+      { media_type: 'CAROUSEL', children: 'c1,c2,c3', caption: 'Arrasta pro lado 👉' },
+    ]);
+    expect(repo.log).toContain('container:c4');
+    expect(ig.published).toBe(1);
+  });
+
+  it('item com erro de processamento: diz qual item falhou', async () => {
+    const ig = new FakePublisher();
+    ig.statuses = ['FINISHED', 'ERROR'];
+    const repo = new MemRepo();
+    expect(await publishPost(deps(ig, repo), post({ media_type: 'CAROUSEL', media }))).toBe('failed');
+    expect(repo.state.error).toContain('item 2 do carrossel');
+    expect(repo.state.error).toContain('60 s');
+  });
+
+  it('regras: 2 a 10 itens; imagem/Reels continuam com 1 arquivo', () => {
+    const base = { ig_account_id: '7b0c7b6e-1c1a-4c7e-9a51-5f5d1c9a0001', caption: '' };
+    const one = PostInputSchema.parse({ ...base, media_type: 'CAROUSEL', media: media.slice(0, 1) });
+    expect(checkPostRules(one)).toContain('pelo menos 2');
+    expect(checkPostRules(PostInputSchema.parse({ ...base, media_type: 'CAROUSEL', media }))).toBeNull();
+    expect(() => PostInputSchema.parse({ ...base, media_type: 'CAROUSEL', media: Array(11).fill(media[0]) })).toThrow();
+    expect(checkPostRules(PostInputSchema.parse({ ...base, media_type: 'IMAGE', media: [media[0], media[2]] }))).toContain('Carrossel');
+  });
+});

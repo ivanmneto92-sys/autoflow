@@ -1,8 +1,10 @@
 /** Store em Postgres (Supabase). */
 import type postgres from 'postgres';
 import { config } from '../config.js';
+import { generateCode } from '../lib/coupon.js';
 import { decrypt } from '../lib/crypto.js';
 import type {
+  CouponResult,
   OrderInput,
   Account,
   Contact,
@@ -280,6 +282,46 @@ export class PgStore implements Store {
         if ((err as { code?: string }).code !== '23505' || attempt >= 4) throw err;
       }
     }
+  }
+
+  async assignCoupon(workspaceId: string, campaignId: string, contactId: string): Promise<CouponResult> {
+    return this.sql.begin(async (tx) => {
+      const [camp] = await tx`
+        select id, mode, prefix, discount, valid_days from autoflow.coupon_campaigns
+        where id = ${campaignId} and workspace_id = ${workspaceId} and not archived
+        for share`;
+      if (!camp) return { status: 'unavailable' } as const;
+      const discount = camp.discount as string;
+      const own = async () => {
+        const [c] = await tx`select code, expires_at from autoflow.coupons where campaign_id = ${campaignId} and contact_id = ${contactId}`;
+        return c ? ({ status: 'existing', code: c.code as string, discount, expiresAt: (c.expires_at as Date | null) ?? null } as const) : null;
+      };
+      const had = await own();
+      if (had) return had;
+      const expires = camp.valid_days ? tx`now() + make_interval(days => ${camp.valid_days as number})` : null;
+
+      if (camp.mode === 'list') {
+        const [c] = await tx`
+          update autoflow.coupons set contact_id = ${contactId}, assigned_at = now(), expires_at = ${expires}
+          where id = (select id from autoflow.coupons where campaign_id = ${campaignId} and assigned_at is null
+                      order by created_at limit 1 for update skip locked)
+          returning code, expires_at`;
+        if (!c) return { status: 'sold_out' } as const;
+        return { status: 'new', code: c.code as string, discount, expiresAt: (c.expires_at as Date | null) ?? null } as const;
+      }
+
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const [c] = await tx`
+          insert into autoflow.coupons (workspace_id, campaign_id, code, contact_id, assigned_at, expires_at)
+          values (${workspaceId}, ${campaignId}, ${generateCode(camp.prefix as string)}, ${contactId}, now(), ${expires})
+          on conflict do nothing
+          returning code, expires_at`;
+        if (c) return { status: 'new', code: c.code as string, discount, expiresAt: (c.expires_at as Date | null) ?? null } as const;
+        const raced = await own(); // a mesma pessoa pegou em paralelo
+        if (raced) return raced;
+      }
+      throw new Error('Não consegui gerar um código de cupom único');
+    });
   }
 
   async logEvent(e: EventLog) {

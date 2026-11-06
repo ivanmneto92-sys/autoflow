@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FlowGraph } from '../flow/schema.js';
 import type {
+  CouponResult,
   OrderInput,
   Account,
   Contact,
@@ -153,6 +154,25 @@ export class MemoryStore implements Store {
     const order = { ...o, id: `order-${number}`, number };
     this.orders.push(order);
     return { id: order.id, number };
+  }
+
+  couponCampaigns: { id: string; workspaceId: string; mode: 'generated' | 'list'; prefix: string; discount: string; validDays: number | null; archived?: boolean }[] = [];
+  coupons: { campaignId: string; code: string; contactId: string | null; expiresAt: Date | null }[] = [];
+  async assignCoupon(workspaceId: string, campaignId: string, contactId: string): Promise<CouponResult> {
+    const camp = this.couponCampaigns.find((c) => c.id === campaignId && c.workspaceId === workspaceId && !c.archived);
+    if (!camp) return { status: 'unavailable' };
+    const had = this.coupons.find((c) => c.campaignId === campaignId && c.contactId === contactId);
+    if (had) return { status: 'existing', code: had.code, discount: camp.discount, expiresAt: had.expiresAt };
+    const expiresAt = camp.validDays ? new Date(Date.now() + camp.validDays * 86_400_000) : null;
+    let c = camp.mode === 'list' ? this.coupons.find((x) => x.campaignId === campaignId && !x.contactId) : undefined;
+    if (camp.mode === 'list' && !c) return { status: 'sold_out' };
+    if (!c) {
+      c = { campaignId, code: `${camp.prefix}-${String(this.coupons.length + 1).padStart(6, '0')}`, contactId: null, expiresAt: null };
+      this.coupons.push(c);
+    }
+    c.contactId = contactId;
+    c.expiresAt = expiresAt;
+    return { status: 'new', code: c.code, discount: camp.discount, expiresAt };
   }
 
   // Helpers de teste

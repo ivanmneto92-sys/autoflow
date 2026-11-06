@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import type { FlowNode } from '../shared/schema';
-import { Icon } from '../components/ui';
+import { Link } from 'react-router-dom';
+import { Icon, useLoad } from '../components/ui';
+import { api } from '../lib/api';
 import { NODE_META } from './graph';
 
 type Props = {
@@ -425,6 +427,7 @@ const ACTION_TYPES: [string, string][] = [
   ['set_var', 'Definir variável'],
   ['human_handoff', 'Passar para atendente (pausa o robô)'],
   ['create_order', 'Registrar pedido (vai para Pedidos)'],
+  ['give_coupon', 'Entregar cupom único'],
   ['webhook', 'Chamar webhook (n8n, sistema, Pix…)'],
 ];
 
@@ -445,6 +448,7 @@ function ActionForm({ node, set }: { node: Extract<FlowNode, { type: 'action' }>
                     : t === 'set_field' ? { type: t, field: '', value: '' }
                     : t === 'set_var' ? { type: t, var: '', value: '' }
                     : t === 'webhook' ? { type: t, url: 'https://', method: 'POST' }
+                    : t === 'give_coupon' ? { type: t, campaign_id: '' }
                     : t === 'create_order' ? { type: t, summary: '{{field.pedido}}', fields: ['nome', 'endereco', 'telefone', 'pagamento'], total: '' }
                     : { type: t };
                 })
@@ -502,6 +506,7 @@ function ActionForm({ node, set }: { node: Extract<FlowNode, { type: 'action' }>
               </span>
             </>
           )}
+          {a.type === 'give_coupon' && <CouponPicker value={a.campaign_id} onChange={(v) => set((d) => (d.actions[i].campaign_id = v))} />}
           {a.type === 'webhook' && (
             <>
               <div className="row">
@@ -528,6 +533,43 @@ function ActionForm({ node, set }: { node: Extract<FlowNode, { type: 'action' }>
       <button className="btn btn-sm" onClick={() => set((d) => d.actions.push({ type: 'add_tag', tag: '' }))}>
         <Icon name="plus" /> Ação
       </button>
+    </>
+  );
+}
+
+/** Escolhe a campanha de cupons e explica as variáveis. */
+function CouponPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const camps = useLoad(() => api<{ id: string; name: string; discount: string; archived: boolean; mode: string; available: number }[]>('/app/coupons'), []);
+  const list = (camps.data ?? []).filter((c) => !c.archived || c.id === value);
+  const cur = list.find((c) => c.id === value);
+  return (
+    <>
+      <label className="label" style={{ marginBottom: 0 }}>
+        Campanha
+      </label>
+      {camps.data && !list.length ? (
+        <div className="hint">
+          Nenhuma campanha ainda. <Link to="/cupons">Crie uma na página Cupons</Link> e volte aqui.
+        </div>
+      ) : (
+        <select className="select" value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Escolha…</option>
+          {list.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+              {c.discount ? ` — ${c.discount}` : ''}
+              {c.mode === 'list' ? ` (${c.available} códigos livres)` : ''}
+            </option>
+          ))}
+        </select>
+      )}
+      {cur?.mode === 'list' && cur.available === 0 && <div className="hint" style={{ color: 'var(--danger)' }}>Os códigos dessa lista acabaram. Adicione mais em Cupons.</div>}
+      <span className="hint">
+        Cada pessoa recebe um código só dela (se pedir de novo, recebe o mesmo). Use na mensagem seguinte:{' '}
+        <span className="mono">{'{{var.coupon_code}}'}</span>, <span className="mono">{'{{var.coupon_discount}}'}</span> e{' '}
+        <span className="mono">{'{{var.coupon_expires}}'}</span> (validade). Para tratar quem já tinha ou quando acabar, use uma Condição com a variável{' '}
+        <span className="mono">coupon_status</span> = <span className="mono">ja_tinha</span> ou <span className="mono">esgotado</span>.
+      </span>
     </>
   );
 }

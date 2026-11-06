@@ -246,6 +246,29 @@ async function runAction(ctx: RunContext, nodeId: string, a: FlowAction): Promis
       });
       return;
     }
+    case 'give_coupon': {
+      const r = await store.assignCoupon(ws, a.campaign_id, ctx.contact.id);
+      const tz = ctx.account.settings.timezone ?? 'America/Sao_Paulo';
+      // coupon_status: novo | ja_tinha | esgotado | indisponivel — use numa Condição para tratar cada caso
+      ctx.session.vars.coupon_status = { new: 'novo', existing: 'ja_tinha', sold_out: 'esgotado', unavailable: 'indisponivel' }[r.status];
+      if (r.status === 'new' || r.status === 'existing') {
+        ctx.session.vars.coupon_code = r.code;
+        ctx.session.vars.coupon_discount = r.discount;
+        ctx.session.vars.coupon_expires = r.expiresAt ? r.expiresAt.toLocaleDateString('pt-BR', { timeZone: tz }) : '';
+      } else {
+        ctx.session.vars.coupon_code = '';
+      }
+      await store.logEvent({
+        workspaceId: ws,
+        contactId: ctx.contact.id,
+        flowId: ctx.session.flowId,
+        sessionId: ctx.session.id,
+        nodeId,
+        type: r.status === 'new' ? 'coupon_given' : r.status === 'existing' ? 'coupon_repeated' : 'coupon_unavailable',
+        data: { campaign_id: a.campaign_id, status: r.status, ...('code' in r ? { code: r.code } : {}) },
+      });
+      return;
+    }
     case 'human_handoff': {
       const hours = ctx.account.settings.bot_pause_hours ?? 12;
       const until = new Date(ctx.now().getTime() + hours * 3_600_000);

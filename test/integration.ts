@@ -200,6 +200,39 @@ const stats = await app.inject({ url: `/admin/flows/${flow.json().id}/stats`, he
 assert.equal(stats.statusCode, 200);
 console.log('  ✓ admin: criar/publicar fluxo, gatilho validado, stats');
 
+// ── Cupons únicos (API do painel + PgStore) ──
+{
+  const h = { authorization: 'Bearer panel-test-token', 'x-workspace-id': ws.id };
+  const pg = new PgStore(sql);
+  const [c1, c2] = await sql`select id from autoflow.contacts where workspace_id = ${ws.id} limit 2`;
+  const [ct] = c2 ? [c2] : await sql`
+    insert into autoflow.contacts (workspace_id, ig_account_id, igsid) values (${ws.id}, ${acc!.id}, ${'u-cupom-' + Date.now()}) returning id`;
+  const gen = await app.inject({ method: 'POST', url: '/app/coupons', headers: h, payload: { name: 'Teste', discount: '10% OFF', prefix: 'teste', valid_days: 7 } });
+  assert.equal(gen.statusCode, 200, gen.body);
+  const a = await pg.assignCoupon(ws.id, gen.json().id, c1!.id);
+  const again = await pg.assignCoupon(ws.id, gen.json().id, c1!.id);
+  const b = await pg.assignCoupon(ws.id, gen.json().id, ct!.id);
+  assert.ok(a.status === 'new' && /^TESTE-[A-Z2-9]{6}$/.test(a.code) && a.expiresAt, JSON.stringify(a));
+  assert.ok(again.status === 'existing' && again.code === a.code);
+  assert.ok(b.status === 'new' && b.code !== a.code);
+
+  const list = await app.inject({ method: 'POST', url: '/app/coupons', headers: h, payload: { name: 'Lista', mode: 'list', codes: `L${Date.now()}A\nL${Date.now()}A` } });
+  assert.equal(list.json().added, 1);
+  assert.equal((await pg.assignCoupon(ws.id, list.json().id, c1!.id)).status, 'new');
+  assert.equal((await pg.assignCoupon(ws.id, list.json().id, ct!.id)).status, 'sold_out');
+
+  const look = await app.inject({ url: `/app/coupons/lookup?code=${a.status === 'new' ? a.code.toLowerCase() : ''}`, headers: h });
+  assert.equal(look.json().status, 'valid');
+  const red = await app.inject({ method: 'POST', url: '/app/coupons/redeem', headers: h, payload: { code: a.status === 'new' ? a.code : '' } });
+  assert.equal(red.json().status, 'used');
+  const twice = await app.inject({ method: 'POST', url: '/app/coupons/redeem', headers: h, payload: { code: a.status === 'new' ? a.code : '' } });
+  assert.equal(twice.statusCode, 409);
+  const camps = await app.inject({ url: '/app/coupons', headers: h });
+  const row = camps.json().find((x: { id: string }) => x.id === gen.json().id);
+  assert.deepEqual([row.given, row.redeemed], [2, 1]);
+  console.log('  ✓ cupons: código único por pessoa, lista esgota, baixa no balcão');
+}
+
 await app.close();
 await inboundQueue().obliterate({ force: true });
 await scheduledQueue().close();

@@ -12,6 +12,7 @@ import { Dashboard } from './pages/Dashboard';
 import { FlowEditor } from './pages/FlowEditor';
 import { Flows } from './pages/Flows';
 import { Templates } from './pages/Templates';
+import { Coupons } from './pages/Coupons';
 import { Inbox } from './pages/Inbox';
 import { Login } from './pages/Login';
 import { Onboarding } from './pages/Onboarding';
@@ -36,6 +37,7 @@ function Root() {
         <Route path="/gatilhos" element={<Triggers />} />
         <Route path="/publicacoes" element={<Posts />} />
         <Route path="/pedidos" element={<Orders />} />
+        <Route path="/cupons" element={<Coupons />} />
         <Route path="/simulador" element={<Simulator />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/inbox/:id" element={<Inbox />} />

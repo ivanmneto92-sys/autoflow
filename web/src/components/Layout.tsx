@@ -12,6 +12,7 @@ const items = [
   { to: '/publicacoes', label: 'Publicações', icon: 'calendar' },
   { to: '/simulador', label: 'Simulador', icon: 'play' },
   { to: '/pedidos', label: 'Pedidos', icon: 'bag' },
+  { to: '/cupons', label: 'Cupons', icon: 'ticket' },
   { to: '/inbox', label: 'Inbox', icon: 'inbox' },
   { to: '/contatos', label: 'Contatos', icon: 'users' },
   { to: '/instagram', label: 'Instagram', icon: 'instagram' },

@@ -106,6 +106,11 @@ export interface OrderInput {
   totalCents: number | null;
 }
 
+/** Resultado de "entregar cupom": novo, a pessoa já tinha, acabaram os códigos ou campanha inexistente/arquivada. */
+export type CouponResult =
+  | { status: 'new' | 'existing'; code: string; discount: string; expiresAt: Date | null }
+  | { status: 'sold_out' | 'unavailable' };
+
 export interface EventLog {
   workspaceId: string;
   contactId?: string | null;
@@ -156,4 +161,5 @@ export interface Store {
   logEvent(e: EventLog): Promise<void>;
   /** Cria um pedido com número sequencial por negócio. */
   createOrder(o: OrderInput): Promise<{ id: string; number: number }>;
+  assignCoupon(workspaceId: string, campaignId: string, contactId: string): Promise<CouponResult>;
 }

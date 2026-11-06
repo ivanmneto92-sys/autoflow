@@ -51,7 +51,7 @@ export interface PublisherDeps {
   log?: Logger;
   sleep?: (ms: number) => Promise<void>;
   /** Quanto esperar o contêiner ficar pronto (Reels demora mais). */
-  readyTimeoutMs?: { IMAGE: number; REELS: number };
+  readyTimeoutMs?: Partial<Record<MediaType, number>>;
   pollMs?: number;
 }
 
@@ -80,12 +80,38 @@ function containerParams(post: DuePost): Record<string, string> {
   return { media_type: 'REELS', video_url: item.url, caption: post.caption, share_to_feed: 'true' };
 }
 
+/**
+ * Cria o contêiner que vai ser publicado. Carrossel: um contêiner por foto/vídeo (is_carousel_item),
+ * espera cada um ficar pronto e junta tudo num contêiner CAROUSEL com a legenda.
+ */
+async function createContainer(deps: PublisherDeps, token: string, igUserId: string, post: DuePost): Promise<string> {
+  if (post.media_type !== 'CAROUSEL') return (await deps.ig.createMediaContainer(token, igUserId, containerParams(post))).id;
+  if (post.media.length < 2 || post.media.length > 10) throw new PublishError('O carrossel precisa ter de 2 a 10 fotos ou vídeos');
+  const children: string[] = [];
+  for (const [i, item] of post.media.entries()) {
+    const params: Record<string, string> =
+      item.kind === 'video' ? { media_type: 'VIDEO', video_url: item.url, is_carousel_item: 'true' } : { image_url: item.url, is_carousel_item: 'true' };
+    let id: string;
+    try {
+      id = (await deps.ig.createMediaContainer(token, igUserId, params)).id;
+    } catch (err) {
+      if (err instanceof IgApiError && !err.isAuthError && !err.isRateLimit) throw new PublishError(`Item ${i + 1} do carrossel: ${friendlyPublishError(err)}`);
+      throw err;
+    }
+    children.push(id);
+  }
+  for (const [i, id] of children.entries())
+    if ((await waitReady(deps, token, post, id, i + 1)) === 'expired') throw new PublishError('A Meta descartou um item do carrossel antes de publicar. Tente de novo.');
+  return (await deps.ig.createMediaContainer(token, igUserId, { media_type: 'CAROUSEL', children: children.join(','), caption: post.caption })).id;
+}
+
 /** Espera o contêiner ficar pronto. Devolve 'expired' se a Meta descartou (precisa recriar). */
-async function waitReady(deps: PublisherDeps, token: string, post: DuePost, containerId: string): Promise<'ready' | 'expired'> {
+async function waitReady(deps: PublisherDeps, token: string, post: DuePost, containerId: string, item?: number): Promise<'ready' | 'expired'> {
   const sleep = deps.sleep ?? defaultSleep;
-  const timeouts = deps.readyTimeoutMs ?? { IMAGE: 3 * 60_000, REELS: 15 * 60_000 };
+  const timeouts = { IMAGE: 3 * 60_000, REELS: 15 * 60_000, CAROUSEL: 15 * 60_000, ...deps.readyTimeoutMs };
   const poll = deps.pollMs ?? 5000;
   const deadline = Date.now() + timeouts[post.media_type];
+  const kind = item ? post.media[item - 1]?.kind : post.media_type === 'REELS' ? 'video' : 'image';
   for (;;) {
     const st = await deps.ig.getContainerStatus(token, containerId);
     const code = st.status_code ?? 'FINISHED'; // contêiner de imagem às vezes não informa status
@@ -95,8 +121,12 @@ async function waitReady(deps: PublisherDeps, token: string, post: DuePost, cont
       throw new PublishError('O envio foi interrompido, mas a Meta indica que o post já saiu. Confira no Instagram antes de publicar de novo.');
     if (code === 'ERROR')
       throw new PublishError(
-        `A Meta não conseguiu processar a mídia${st.status ? ` (${st.status})` : ''}. Confira o formato: ${
-          post.media_type === 'REELS' ? 'vídeo MP4/MOV (H.264), de 3 s a 15 min, 9:16' : 'imagem JPG, proporção entre 4:5 e 1,91:1'
+        `A Meta não conseguiu processar ${item ? `o item ${item} do carrossel` : 'a mídia'}${st.status ? ` (${st.status})` : ''}. Confira o formato: ${
+          kind === 'video'
+            ? post.media_type === 'CAROUSEL'
+              ? 'vídeo MP4/MOV (H.264), de 3 a 60 s'
+              : 'vídeo MP4/MOV (H.264), de 3 s a 15 min, 9:16'
+            : 'imagem JPG, proporção entre 4:5 e 1,91:1'
         }.`,
       );
     if (Date.now() > deadline) throw new PublishError('A Meta demorou demais para processar a mídia. Tente publicar de novo.');
@@ -120,7 +150,7 @@ export async function publishPost(deps: PublisherDeps, post: DuePost): Promise<'
     let containerId = post.ig_container_id;
     for (let round = 0; ; round++) {
       if (!containerId) {
-        containerId = (await ig.createMediaContainer(token, account.igUserId, containerParams(post))).id;
+        containerId = await createContainer(deps, token, account.igUserId, post);
         await repo.setContainer(post.id, containerId);
       }
       if ((await waitReady(deps, token, post, containerId)) === 'ready') break;

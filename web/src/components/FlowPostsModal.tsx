@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatDateTime } from '../lib/api';
-import { describeAutomation, isEditable, MATCH_LABEL, POST_STATUS, postDate, postTitle, type Match, type Post } from '../lib/posts';
+import { describeAutomation, isEditable, MATCH_LABEL, POST_STATUS, postDate, postTitle, TYPE_LABEL, type Match, type Post } from '../lib/posts';
 import { ErrorBox, Loading, Modal, useLoad, useToast } from './ui';
 
 /** No editor de fluxo: mostra em quais publicações o fluxo é usado e liga ele a uma publicação agendada. */
@@ -118,7 +118,7 @@ export function FlowPostsModal({ flowId, flowPublished, onClose }: { flowId: str
                 <select className="select" value={chosen?.id ?? ''} onChange={(e) => setPostId(e.target.value)}>
                   {candidates.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {formatDateTime(postDate(p).toISOString())} · {p.media_type === 'REELS' ? 'Reels' : 'Imagem'} · {postTitle(p)}
+                      {formatDateTime(postDate(p).toISOString())} · {TYPE_LABEL[p.media_type]} · {postTitle(p)}
                       {p.status !== 'scheduled' ? ` (${POST_STATUS[p.status].label.toLowerCase()})` : ''}
                     </option>
                   ))}

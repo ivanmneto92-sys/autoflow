@@ -1,5 +1,6 @@
 /** Tipos e rótulos das publicações agendadas (usados em Publicações, no editor de fluxo e em Gatilhos). */
-export type MediaType = 'IMAGE' | 'REELS';
+export type MediaType = 'IMAGE' | 'REELS' | 'CAROUSEL';
+export const TYPE_LABEL: Record<MediaType, string> = { IMAGE: 'Imagem', CAROUSEL: 'Carrossel', REELS: 'Reels' };
 export type PostStatus = 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled';
 export type Match = 'contains' | 'exact' | 'starts_with';
 
@@ -51,5 +52,5 @@ export const postDate = (p: Post) => new Date(p.status === 'published' && p.publ
 
 export function postTitle(p: Post): string {
   const first = p.caption.split('\n')[0]?.trim();
-  return first ? (first.length > 60 ? first.slice(0, 57) + '…' : first) : p.media_type === 'REELS' ? 'Reels sem legenda' : 'Post sem legenda';
+  return first ? (first.length > 60 ? first.slice(0, 57) + '…' : first) : p.media_type === 'REELS' ? 'Reels sem legenda' : p.media_type === 'CAROUSEL' ? 'Carrossel sem legenda' : 'Post sem legenda';
 }

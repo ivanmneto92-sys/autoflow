@@ -165,6 +165,7 @@ export function templatePreview(t: Template): string[] {
         for (const a of n.data.actions)
           if (a.type === 'create_order') out.push('🧾 Registra na página Pedidos');
           else if (a.type === 'human_handoff') out.push('👤 Passa para um atendente');
+          else if (a.type === 'give_coupon') out.push('🎟 Entrega um cupom único');
         break;
       case 'delay':
         out.push(`⏱ Espera ${n.data.minutes >= 60 ? `${Math.round(n.data.minutes / 60)} h` : `${n.data.minutes} min`}`);
