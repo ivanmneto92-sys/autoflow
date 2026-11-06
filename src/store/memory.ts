@@ -16,6 +16,7 @@ import type {
   TriggerType,
 } from './types.js';
 import { ACTIVE_STATUSES } from './types.js';
+import { normalizeMid } from '../lib/mid.js';
 
 export class MemoryStore implements Store {
   accounts: Account[] = [];
@@ -140,7 +141,8 @@ export class MemoryStore implements Store {
   }
 
   async messageExists(mid: string) {
-    return this.messages.some((m) => m.mid === mid);
+    const key = normalizeMid(mid);
+    return this.messages.some((m) => m.mid === mid || normalizeMid(m.mid) === key);
   }
   async logMessage(m: MessageLog) {
     this.messages.push({ ...m, createdAt: new Date() });

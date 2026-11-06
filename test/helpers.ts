@@ -54,6 +54,7 @@ export function setup(opts: { quota?: boolean; settings?: Account['settings']; n
     scheduler: { schedule: async (job, delayMs) => void scheduled.push({ job, delayMs }) },
     now: () => now,
     linkBase: opts.linkBase,
+    echoGraceMs: 0,
   });
   let tid = 0;
   const addFlow = (graph: FlowGraph, flowId = `flow-${Math.random().toString(36).slice(2, 8)}`) => {

@@ -3,6 +3,7 @@ import type postgres from 'postgres';
 import { config } from '../config.js';
 import { generateCode } from '../lib/coupon.js';
 import { linkCode } from '../lib/links.js';
+import { normalizeMid } from '../lib/mid.js';
 import { decrypt } from '../lib/crypto.js';
 import type {
   CouponResult,
@@ -257,14 +258,14 @@ export class PgStore implements Store {
   }
 
   async messageExists(mid: string) {
-    const [r] = await this.sql`select 1 from autoflow.messages where mid = ${mid}`;
+    const [r] = await this.sql`select 1 from autoflow.messages where mid = ${normalizeMid(mid)} or mid = ${mid} limit 1`;
     return Boolean(r);
   }
 
   async logMessage(m: MessageLog) {
     await this.sql`
       insert into autoflow.messages (workspace_id, contact_id, direction, source, mid, text, payload, session_id)
-      values (${m.workspaceId}, ${m.contactId}, ${m.direction}, ${m.source}, ${m.mid ?? null}, ${m.text ?? null},
+      values (${m.workspaceId}, ${m.contactId}, ${m.direction}, ${m.source}, ${normalizeMid(m.mid)}, ${m.text ?? null},
               ${m.payload === undefined ? null : this.sql.json(m.payload as any)}, ${m.sessionId ?? null})
       on conflict do nothing`;
   }

@@ -268,3 +268,23 @@ describe('🔒 quando a Meta exige que a pessoa ENVIE uma mensagem antes de conf
     expect(t.store.events.filter((e: { type: string }) => e.type === 'follow_check_failed')).toHaveLength(2);
   });
 });
+
+describe('eco da mensagem do robô com outro ID não pausa o robô (bug do teste real)', () => {
+  it('botão 🔒 continua funcionando depois do eco', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow({
+      start: 'm',
+      nodes: { m: { type: 'message', data: { text: 'Seu material 👇', buttons: [{ label: 'CLIQUE AQUI', url: 'https://site.com/guia', followers_only: true }] } } },
+    });
+    t.addTrigger(flowId, 'comment', { keywords: ['canva'], match: 'contains', public_replies: [], once_per_contact: false });
+    const sent = 'bmV3X2lnX2RtX2l0ZAW06MTpJR01lc3NhZA2VJRDoxNzg0MTQyMTYxMTI1NDMwMTozNDAyODIzNjY4NDE3MTAzMDEyNDQyNTk1NjQ4MzUzMjk1MDI3MDU6MzMwOTI5NjQ1MzI3OTU2NTkyNDQzMzE3MjM5MDQ3NzgyNDAZD';
+    const echo = 'aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDIxNjExMjU0MzAxOjM0MDI4MjM2Njg0MTcxMDMwMTI0NDI1OTU2NDgzNTMyOTUwMjcwNTozMzA5Mjk2NDUzMjc5NTY1OTI0NDMzMTcyMzkwNDc3ODI0MAZDZD';
+    t.ig.sendMessage = async (_t, _i, to, msg) => (t.ig.sent.push({ to, msg }), { messageId: sent });
+    await t.engine.handleEvent(comment('Canva'));
+    await t.engine.handleEvent({ kind: 'echo', igUserId: t.account.igUserId, recipientId: 'user-1', mid: echo, timestamp: 0 });
+    expect(t.store.contacts[0]!.botPausedUntil ?? null).toBeNull();
+    await t.engine.handleEvent(postback(firstPostback(t.ig.sent[0]!.msg as never), 'user-1', 'CLIQUE AQUI'));
+    expect(t.ig.sent).toHaveLength(2);
+    expect(textOf(t.ig.sent[1]!.msg)).toContain('exclusivo');
+  });
+});

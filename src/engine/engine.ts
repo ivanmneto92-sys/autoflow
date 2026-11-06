@@ -57,6 +57,9 @@ export class Engine {
   private async onEcho(account: Account, e: Extract<InboundEvent, { kind: 'echo' }>) {
     const { store } = this.deps;
     if (await store.messageExists(e.mid)) return; // enviada pelo bot
+    // O eco pode chegar antes de o robô terminar de gravar o envio: confere de novo antes de pausar
+    await new Promise((r) => setTimeout(r, this.deps.echoGraceMs ?? 2500));
+    if (await store.messageExists(e.mid)) return;
     const { contact } = await store.upsertContact(account, e.recipientId, {});
     await store.logMessage({
       workspaceId: account.workspaceId,

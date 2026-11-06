@@ -138,3 +138,16 @@ describe('formato Graph API', () => {
     });
   });
 });
+
+describe('mid da Meta', () => {
+  it('reconhece a mesma mensagem com codificações diferentes (envio x eco)', async () => {
+    const { normalizeMid } = await import('../src/lib/mid.js');
+    // IDs reais: o envio respondeu com o 1º, o eco do webhook chegou com o 2º
+    const sent = 'bmV3X2lnX2RtX2l0ZAW06MTpJR01lc3NhZA2VJRDoxNzg0MTQyMTYxMTI1NDMwMTozNDAyODIzNjY4NDE3MTAzMDEyNDQyNTk1NjQ4MzUzMjk1MDI3MDU6MzMwOTI5NjQ1MzI3OTU2NTkyNDQzMzE3MjM5MDQ3NzgyNDAZD';
+    const echo = 'aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDIxNjExMjU0MzAxOjM0MDI4MjM2Njg0MTcxMDMwMTI0NDI1OTU2NDgzNTMyOTUwMjcwNTozMzA5Mjk2NDUzMjc5NTY1OTI0NDMzMTcyMzkwNDc3ODI0MAZDZD';
+    expect(normalizeMid(sent)).toBe(normalizeMid(echo));
+    expect(normalizeMid(sent)).toMatch(/^ig:17841421611254301:/);
+    expect(normalizeMid('m_123')).toBe('m_123');
+    expect(normalizeMid(null)).toBeNull();
+  });
+});

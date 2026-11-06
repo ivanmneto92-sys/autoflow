@@ -34,6 +34,8 @@ export interface EngineDeps {
   log?: EngineLogger;
   /** Endereço público da API: botões de link viram <linkBase>/r/<code> para contar cliques. Sem isso, links vão direto. */
   linkBase?: string;
+  /** Espera antes de concluir que um eco é de humano (o robô pode ainda estar gravando a mensagem que acabou de enviar). */
+  echoGraceMs?: number;
 }
 
 export const MAX_STEPS = 50;
