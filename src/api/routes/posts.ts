@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, unlink } from 'node:fs/promises';
+import { mkdir, readdir, rename, stat, truncate, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -21,6 +21,19 @@ import { HttpError } from '../http.js';
 const uuid = z.string().uuid();
 const idOf = (req: FastifyRequest) => uuid.parse((req.params as { id: string }).id);
 const MAX_AHEAD_DAYS = 180;
+/** Tamanho máximo de cada pedaço do envio em partes (o Cloudflare barra acima de 100 MB por requisição). */
+export const CHUNK_MAX_MB = 60;
+
+/** Apaga envios em partes abandonados há mais de 1 dia. */
+async function cleanupStaleParts(dir: string) {
+  const files = await readdir(dir).catch(() => [] as string[]);
+  const old = Date.now() - 86_400_000;
+  for (const f of files.filter((x) => x.endsWith('.part'))) {
+    const p = join(dir, f);
+    const s = await stat(p).catch(() => null);
+    if (s && s.mtimeMs < old) await unlink(p).catch(() => {});
+  }
+}
 
 export async function postRoutes(app: FastifyInstance, wsOf: (req: FastifyRequest) => string) {
   const sql = db();
@@ -62,6 +75,60 @@ export async function postRoutes(app: FastifyInstance, wsOf: (req: FastifyReques
       throw new HttpError(400, 'Arquivo vazio');
     }
     return { url: mediaUrl(ws, file), kind: allowed.kind, size };
+  });
+
+  /**
+   * Envio em partes (vídeos grandes): o Cloudflare barra requisições acima de 100 MB, então o painel manda
+   * pedaços de até CHUNK_MAX_MB, em ordem. Cabeçalhos: x-upload-id (UUID do envio), x-offset (byte inicial
+   * do pedaço) e x-total (tamanho do arquivo inteiro). Reenviar um pedaço é seguro (corta e regrava a partir do offset).
+   * Quando chega o último byte, o arquivo é renomeado e a resposta traz a URL, igual ao /app/media.
+   */
+  app.post('/app/media/chunk', async (req) => {
+    const ws = wsOf(req);
+    const type = String(req.headers['content-type'] ?? '').split(';')[0]!.trim().toLowerCase();
+    const allowed = MEDIA_TYPES_ALLOWED[type];
+    if (!allowed) throw new HttpError(415, 'Formato não aceito. Use imagem JPG ou vídeo MP4/MOV.');
+    const id = String(req.headers['x-upload-id'] ?? '').toLowerCase();
+    const offset = Number(req.headers['x-offset']);
+    const total = Number(req.headers['x-total']);
+    if (!uuid.safeParse(id).success || !Number.isSafeInteger(offset) || !Number.isSafeInteger(total) || offset < 0 || total <= 0 || offset >= total)
+      throw new HttpError(400, 'Envio inválido. Tente de novo.');
+    const max = config().MEDIA_MAX_MB * 1024 * 1024;
+    if (total > max) throw new HttpError(413, `Arquivo maior que ${config().MEDIA_MAX_MB} MB`);
+
+    const dir = join(mediaRoot(), ws);
+    await mkdir(dir, { recursive: true });
+    const final = join(dir, `${id}.${allowed.ext}`);
+    const part = `${final}.part`;
+    if (offset === 0) await cleanupStaleParts(dir);
+    else {
+      const have = await stat(part).then((s) => s.size).catch(() => -1);
+      if (have < offset) throw new HttpError(409, 'O envio se perdeu no meio. Escolha o arquivo de novo.');
+    }
+    // Começa do zero no 1º pedaço; nos demais, corta o que passou do offset (pedaço reenviado)
+    if (offset === 0) await writeFile(part, '');
+    else await truncate(part, offset);
+
+    let size = 0;
+    const limit = new Transform({
+      transform(chunk: Buffer, _enc, cb) {
+        size += chunk.length;
+        if (size > CHUNK_MAX_MB * 1024 * 1024 || offset + size > total) return cb(new HttpError(413, 'Pedaço maior que o esperado'));
+        cb(null, chunk);
+      },
+    });
+    const source = req.body as NodeJS.ReadableStream;
+    source.on('error', () => {});
+    try {
+      await pipeline(source, limit, createWriteStream(part, { flags: 'a' }));
+    } catch (err) {
+      throw err instanceof HttpError ? err : new HttpError(400, 'O envio foi interrompido. Tente de novo.');
+    }
+    if (!size) throw new HttpError(400, 'Pedaço vazio');
+    const received = offset + size;
+    if (received < total) return { received };
+    await rename(part, final);
+    return { url: mediaUrl(ws, `${id}.${allowed.ext}`), kind: allowed.kind, size: total };
   });
 
   /** A conta deu permissão para publicar? (null = não dá para saber com esse tipo de token) */

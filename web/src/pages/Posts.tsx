@@ -447,7 +447,7 @@ async function videoDuration(file: File): Promise<number> {
   }
 }
 
-const MAX_VIDEO_MB = 100;
+const MAX_VIDEO_MB = 240;
 const CAROUSEL_MAX = 10;
 
 /** Proporção (largura/altura) de uma imagem já enviada. */

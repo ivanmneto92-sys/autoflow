@@ -44,7 +44,7 @@ const schema = z.object({
 
   // Mídias das publicações agendadas: pasta local servida em PUBLIC_BASE_URL/media (a Meta baixa daí)
   MEDIA_DIR: z.string().default('uploads'),
-  MEDIA_MAX_MB: z.coerce.number().positive().default(100),
+  MEDIA_MAX_MB: z.coerce.number().positive().default(240),
   // Intervalo (segundos) em que o worker procura publicações vencidas
   PUBLISH_POLL_SECONDS: z.coerce.number().min(5).default(20),
 

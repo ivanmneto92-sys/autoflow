@@ -16,6 +16,7 @@ x-app: &app
     PORT: '3000'
     REDIS_URL: redis://redis:6379
     MEDIA_DIR: /app/uploads
+    MEDIA_MAX_MB: '240'
   volumes:
     - ./uploads:/app/uploads
   depends_on:

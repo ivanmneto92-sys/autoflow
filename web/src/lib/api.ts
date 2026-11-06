@@ -77,17 +77,46 @@ export function formatDateTime(iso: string | null | undefined): string {
 }
 
 /** Envia um arquivo para a API (corpo bruto) com progresso de 0 a 1. */
-export async function apiUpload(
-  file: Blob,
-  onProgress?: (p: number) => void,
-): Promise<{ url: string; kind: 'image' | 'video'; size: number }> {
+type Uploaded = { url: string; kind: 'image' | 'video'; size: number };
+
+/** Acima disso o arquivo sobe em partes (o Cloudflare barra requisições acima de 100 MB). */
+const CHUNK_BYTES = 50 * 1024 * 1024;
+
+export async function apiUpload(file: Blob, onProgress?: (p: number) => void): Promise<Uploaded> {
+  if (file.size <= CHUNK_BYTES) return sendBlob('/app/media', file, file.type, {}, onProgress);
+
+  // Envio em partes, em ordem; cada parte tenta até 3 vezes
+  const id = crypto.randomUUID();
+  let last: Uploaded | { received: number } | null = null;
+  for (let offset = 0; offset < file.size; offset += CHUNK_BYTES) {
+    const piece = file.slice(offset, Math.min(offset + CHUNK_BYTES, file.size));
+    const headers = { 'x-upload-id': id, 'x-offset': String(offset), 'x-total': String(file.size) };
+    for (let attempt = 1; ; attempt++) {
+      try {
+        last = await sendBlob<Uploaded | { received: number }>('/app/media/chunk', piece, file.type, headers, (p) =>
+          onProgress?.((offset + p * piece.size) / file.size),
+        );
+        break;
+      } catch (e) {
+        const status = (e as ApiError).status;
+        if (attempt >= 3 || status === 409 || status === 413 || status === 415) throw e;
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      }
+    }
+  }
+  if (!last || !('url' in last)) throw new ApiError('O envio não terminou. Tente de novo.', 0, null);
+  return last;
+}
+
+async function sendBlob<T = Uploaded>(path: string, file: Blob, type: string, headers: Record<string, string>, onProgress?: (p: number) => void): Promise<T> {
   const { data } = await supabase.auth.getSession();
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${BASE}/app/media`);
+    xhr.open('POST', `${BASE}${path}`);
     if (data.session) xhr.setRequestHeader('Authorization', `Bearer ${data.session.access_token}`);
     if (currentWorkspace) xhr.setRequestHeader('x-workspace-id', currentWorkspace);
-    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.setRequestHeader('Content-Type', type);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
     xhr.onload = () => {
       let body: any = null;

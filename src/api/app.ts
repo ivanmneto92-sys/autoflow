@@ -41,7 +41,7 @@ export async function buildServer(opts: { verifyToken?: TokenVerifier } = {}) {
   await app.register(formbody); // signed_request da Meta vem como form
   await app.register(cors, {
     origin: config().PANEL_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
-    allowedHeaders: ['Authorization', 'Content-Type', 'x-workspace-id'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'x-workspace-id', 'x-upload-id', 'x-offset', 'x-total'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
 
