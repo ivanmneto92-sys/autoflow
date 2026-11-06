@@ -111,10 +111,10 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
   switch (node.type) {
     case 'message': {
       // Voltou aqui pelo toque num botão 🔒: confere se segue e libera (ou pede para seguir)
-      const lock = ctx.session.vars.__lock as { node: string; i: number; retry?: boolean } | undefined;
+      const lock = ctx.session.vars.__lock as { node: string; i: number; retry?: boolean; consent?: boolean } | undefined;
       if (lock?.node === nodeId) {
         delete ctx.session.vars.__lock;
-        return unlockButton(ctx, nodeId, node, lock.i, Boolean(lock.retry));
+        return unlockButton(ctx, nodeId, node, lock.i, Boolean(lock.retry), Boolean(lock.consent));
       }
       const text = await render(ctx, node.data.text);
       if (node.data.image_url) await ctx.send({ kind: 'image', url: node.data.image_url }, nodeId);
@@ -466,14 +466,21 @@ async function charge(ctx: RunContext, nodeId: string, node: Extract<FlowNode, {
 }
 
 /** Pergunta à Meta se o contato segue a conta. null = não deu para saber (fica registrado em follow_check_failed). */
+/** Última falha foi "falta consentimento" (a pessoa ainda não ENVIOU mensagem — só comentou/tocou em botão)? */
+const NO_CONSENT = /consent/i;
+
 async function checkFollower(ctx: RunContext): Promise<boolean | null> {
+  return (await checkFollowerDetailed(ctx)).follows;
+}
+
+async function checkFollowerDetailed(ctx: RunContext): Promise<{ follows: boolean | null; noConsent: boolean }> {
   const { store } = ctx.deps;
   try {
     const token = await store.getAccessToken(ctx.account.id);
     const follows = await ctx.deps.ig.getFollowStatus(token, ctx.contact.igsid);
     // Guarda quando confirmamos que segue: da próxima vez o 🔒 abre direto (sem o toque extra)
     await store.setField(ctx.contact.id, FOLLOWER_FIELD, follows ? ctx.now().toISOString() : '');
-    return follows;
+    return { follows, noConsent: false };
   } catch (err) {
     await store.logEvent({
       workspaceId: ctx.account.workspaceId,
@@ -483,7 +490,7 @@ async function checkFollower(ctx: RunContext): Promise<boolean | null> {
       type: 'follow_check_failed',
       data: { message: (err as Error).message },
     });
-    return null;
+    return { follows: null, noConsent: NO_CONSENT.test((err as Error).message) };
   }
 }
 
@@ -504,10 +511,30 @@ async function knownFollower(ctx: RunContext): Promise<boolean> {
 }
 
 /** Toque num botão 🔒: quem segue recebe o link (ou segue o fluxo); quem não segue recebe o pedido para seguir. */
-async function unlockButton(ctx: RunContext, nodeId: string, node: Extract<FlowNode, { type: 'message' }>, i: number, retry: boolean): Promise<NodeResult> {
+async function unlockButton(
+  ctx: RunContext,
+  nodeId: string,
+  node: Extract<FlowNode, { type: 'message' }>,
+  i: number,
+  retry: boolean,
+  consentAsked = false,
+): Promise<NodeResult> {
   const b = node.data.buttons?.[i];
   if (!b) return { type: 'next', next: null };
-  const follows = await checkFollower(ctx);
+  const { follows, noConsent } = await checkFollowerDetailed(ctx);
+  // A Meta pode exigir que a pessoa ENVIE uma mensagem antes de dizer se ela segue (o toque num botão pode não contar).
+  // Uma resposta rápida conta como mensagem enviada: pede o 👍 uma vez e confere de novo.
+  if (follows === null && noConsent && !consentAsked) {
+    await ctx.send(
+      {
+        kind: 'text',
+        text: LOCK_DEFAULTS.consent_text,
+        quickReplies: [{ title: LOCK_DEFAULTS.consent_reply, payload: payload.lock(ctx.version.id, nodeId, i, retry, true) }],
+      },
+      nodeId,
+    );
+    return { type: 'next', next: null };
+  }
   if (follows === false) {
     ctx.session.vars.is_follower = 'nao';
     const buttons: Button[] = [{ type: 'postback', title: LOCK_DEFAULTS.retry, payload: payload.lock(ctx.version.id, nodeId, i, true) }];

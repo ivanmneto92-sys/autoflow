@@ -354,7 +354,8 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
           <div className="small">
             <b>🔒 Como funciona:</b> quem já segue e já falou com você (ou foi confirmado antes) recebe o botão normal — abre no 1º toque. Quem só
             comentou toca uma vez para o robô conferir: se segue, recebe na hora “{LOCK_DEFAULTS.ready_text}” com o link; se não segue, recebe a mensagem abaixo
-            com <b>{LOCK_DEFAULTS.retry}</b> e <b>Abrir perfil</b>.
+            com <b>{LOCK_DEFAULTS.retry}</b> e <b>Abrir perfil</b>. Se a Meta pedir que a pessoa envie uma mensagem antes de conferir, o robô pede um toque em
+            “{LOCK_DEFAULTS.consent_reply}” e confere de novo — tudo automático.
           </div>
           <Field label="Mensagem para quem não segue">
             <TextArea value={node.data.locked_text ?? LOCK_DEFAULTS.locked_text} onChange={(v) => set((d) => (d.locked_text = v))} />

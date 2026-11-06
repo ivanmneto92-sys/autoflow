@@ -227,3 +227,44 @@ describe('🔒 sem passo redundante para quem já segue', () => {
     expect(urlOf(t.ig.sent[0]!.msg as never)).toMatchObject({ type: 'web_url' });
   });
 });
+
+describe('🔒 quando a Meta exige que a pessoa ENVIE uma mensagem antes de conferir', () => {
+  const canva: FlowGraph = {
+    start: 'm',
+    nodes: { m: { type: 'message', data: { text: 'Seu material 👇', buttons: [{ label: 'CLIQUE AQUI', url: 'https://site.com/guia', followers_only: true }] } } },
+  };
+
+  it('pede um 👍 (resposta rápida conta como mensagem) e confere de novo', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow(canva);
+    t.addTrigger(flowId, 'comment', { keywords: ['canva'], match: 'contains', public_replies: [], once_per_contact: false });
+    await t.engine.handleEvent(comment('canva'));
+    t.ig.followError = true; // "User consent is required to access user profile"
+    await t.engine.handleEvent(postback(firstPostback(t.ig.sent[0]!.msg as never), 'user-1', 'CLIQUE AQUI'));
+    const ask = t.ig.sent[1]!.msg;
+    expect(textOf(ask)).toContain('Toque em 👍');
+    const qr = ask.kind === 'text' ? ask.quickReplies![0]! : null;
+    expect(qr!.title).toBe('👍 Liberar');
+    expect(parsePayload(qr!.payload)).toMatchObject({ type: 'lock', consent: true });
+
+    // Tocou no 👍 (chega como mensagem): agora a Meta responde
+    t.ig.followError = false;
+    t.ig.followers.add('user-1');
+    await t.engine.handleEvent(dm('👍 Liberar', 'user-1', qr!.payload));
+    expect(textOf(t.ig.sent[2]!.msg)).toBe('Aqui está 👇');
+  });
+
+  it('se mesmo depois do 👍 a Meta não responder, não prende o cliente: entrega e registra', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow(canva);
+    t.addTrigger(flowId, 'comment', { keywords: ['canva'], match: 'contains', public_replies: [], once_per_contact: false });
+    await t.engine.handleEvent(comment('canva'));
+    t.ig.followError = true;
+    await t.engine.handleEvent(postback(firstPostback(t.ig.sent[0]!.msg as never), 'user-1', 'CLIQUE AQUI'));
+    const ask = t.ig.sent[1]!.msg;
+    await t.engine.handleEvent(dm('👍 Liberar', 'user-1', ask.kind === 'text' ? ask.quickReplies![0]!.payload : ''));
+    expect(t.ig.sent).toHaveLength(3);
+    expect(t.ig.sent[2]!.msg.kind).toBe('buttons');
+    expect(t.store.events.filter((e: { type: string }) => e.type === 'follow_check_failed')).toHaveLength(2);
+  });
+});
