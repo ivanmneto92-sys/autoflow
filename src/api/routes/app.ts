@@ -16,6 +16,7 @@ import { signState } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
 import { PgStore } from '../../store/pg.js';
 import { HttpError } from '../http.js';
+import { automationRoutes } from './automations.js';
 import { couponRoutes } from './coupons.js';
 import { orderRoutes } from './orders.js';
 import { paymentRoutes } from './payments.js';
@@ -110,6 +111,7 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
   await postRoutes(app, wsOf);
   await orderRoutes(app, wsOf);
   await couponRoutes(app, wsOf);
+  await automationRoutes(app, wsOf);
   await paymentRoutes(app, wsOf);
 
   // ───────────── Usuário e workspaces ─────────────

@@ -126,6 +126,13 @@ function EditorInner() {
     // Depois de um comentário a Meta só deixa mandar 1 mensagem até a pessoa responder ou tocar num botão
     if (fromComment) {
       const senders = immediateFromStart(graph).filter((n) => SENDS_MESSAGE.has(graph.nodes[n]!.type));
+      const first = senders[0] ? graph.nodes[senders[0]] : undefined;
+      if (first?.type === 'message' && first.data.image_url)
+        issues.push({
+          level: 'warning',
+          node: senders[0],
+          message: 'Fluxo de comentário: a foto conta como a 1ª mensagem e o texto só chegaria depois que a pessoa interagir. Tire a foto daqui ou coloque-a numa mensagem depois do botão.',
+        });
       for (const n of senders.slice(1))
         issues.push({
           level: 'warning',
@@ -137,7 +144,8 @@ function EditorInner() {
     const map = new Map<string, NodeIssue[]>();
     for (const i of issues) {
       const nodeId = i.node ?? i.message.match(/^nodes\.([^.]+)\./)?.[1];
-      if (nodeId) map.set(nodeId, [...(map.get(nodeId) ?? []), { level: i.level, message: i.message.replace(/^nodes\.[^.]+\./, '') }]);
+      // "nodes.x.data.buttons.0.actions.0.tag: Escreva a tag" → "Escreva a tag"
+      if (nodeId) map.set(nodeId, [...(map.get(nodeId) ?? []), { level: i.level, message: i.message.replace(/^(nodes\.[^.]+\.)?(data\.)?[\w.]+: (?=[A-ZÀ-Ú])/, '').replace(/^nodes\.[^.]+\./, '') }]);
     }
     return { issues, issuesByNode: map };
   }, [graph, fromComment]);
@@ -345,6 +353,13 @@ function EditorInner() {
         </Link>
         <button className="btn btn-sm" onClick={() => setShowPosts(true)} title="Ligar este fluxo aos comentários de uma publicação agendada">
           <Icon name="calendar" /> Usar numa publicação
+        </button>
+        <button
+          className="btn btn-sm"
+          title="Arrumar os blocos da esquerda para a direita"
+          onClick={() => graph && update({ ...graph, layout: autoLayout({ ...graph, layout: undefined }) })}
+        >
+          Organizar
         </button>
         <button className={`btn btn-sm ${showStats ? 'btn-primary' : ''}`} onClick={toggleStats}>
           Métricas

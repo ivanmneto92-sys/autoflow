@@ -170,6 +170,8 @@ export function describeCondition(c: any): string {
       return 'é contato novo';
     case 'is_follower':
       return 'segue a conta';
+    case 'clicked_link':
+      return 'clicou no link';
     case 'has_tag':
       return `tem a tag "${c.tag}"`;
     case 'field_exists':
@@ -188,8 +190,11 @@ export function describeCondition(c: any): string {
 export function summarize(node: FlowNode): string {
   switch (node.type) {
     case 'message':
-    case 'ask':
-      return node.data.text;
+      return `${node.data.image_url ? '🖼 Foto\n' : ''}${node.data.text}`;
+    case 'ask': {
+      const opts = [...(node.data.options ?? []), ...(node.data.skip_label ? [node.data.skip_label] : [])];
+      return `${node.data.text}${opts.length ? `\n⚡ ${opts.join(' · ')}` : ''}${node.data.reminder_minutes ? '\n⏰ lembra se não responder' : ''}`;
+    }
     case 'image':
       return node.data.url;
     case 'carousel':

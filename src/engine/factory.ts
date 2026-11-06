@@ -1,3 +1,4 @@
+import { config } from '../config.js';
 import { GraphIgClient } from '../instagram/client.js';
 import { db } from '../lib/db.js';
 import { logger } from '../lib/logger.js';
@@ -15,6 +16,7 @@ export function createEngine(): Engine {
     ig: new GraphIgClient(),
     payments: new PgPaymentGateway(db()),
     log: logger,
+    linkBase: config().PUBLIC_BASE_URL,
     consumeQuota: (accountId, limit) => consumeHourlyQuota(r, accountId, limit),
     scheduler: {
       async schedule(job, delayMs) {

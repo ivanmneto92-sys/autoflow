@@ -32,7 +32,7 @@ export class FakeIg implements IgClient {
   }
 }
 
-export function setup(opts: { quota?: boolean; settings?: Account['settings']; now?: Date } = {}) {
+export function setup(opts: { quota?: boolean; settings?: Account['settings']; now?: Date; linkBase?: string } = {}) {
   const store = new MemoryStore();
   const ig = new FakeIg();
   const scheduled: { job: ScheduledJob; delayMs: number }[] = [];
@@ -53,6 +53,7 @@ export function setup(opts: { quota?: boolean; settings?: Account['settings']; n
     consumeQuota: async () => opts.quota ?? true,
     scheduler: { schedule: async (job, delayMs) => void scheduled.push({ job, delayMs }) },
     now: () => now,
+    linkBase: opts.linkBase,
   });
   let tid = 0;
   const addFlow = (graph: FlowGraph, flowId = `flow-${Math.random().toString(36).slice(2, 8)}`) => {

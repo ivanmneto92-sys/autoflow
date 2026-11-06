@@ -21,6 +21,15 @@ export const LOCK_DEFAULTS = {
   retry: 'Já sigo',
 };
 
+/** Ações que rodam no toque de um botão / resposta rápida (sem precisar de um nó de Ação). */
+export const ButtonActionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('add_tag'), tag: z.string().trim().min(1, 'Escreva o nome da tag').max(60) }),
+  z.object({ type: z.literal('remove_tag'), tag: z.string().trim().min(1, 'Escreva o nome da tag').max(60) }),
+  z.object({ type: z.literal('set_field'), field: z.string().regex(/^[a-z0-9_]+$/, 'Nome do campo: letras minúsculas, números e _'), value: z.string().max(500) }),
+  z.object({ type: z.literal('human_handoff') }),
+]);
+export type ButtonAction = z.infer<typeof ButtonActionSchema>;
+
 export const ButtonSchema = z
   .object({
     label: z.string().min(1).max(20),
@@ -28,10 +37,11 @@ export const ButtonSchema = z
     url: httpUrl.optional(), // OU botão de link
     // 🔒 Só para seguidores: ao tocar, confere se a pessoa segue antes de abrir o link / seguir o fluxo
     followers_only: z.boolean().optional(),
+    actions: z.array(ButtonActionSchema).max(5).optional(), // rodam no toque (no link: quando o clique é rastreado)
   })
   .refine((b) => !(b.next && b.url), 'Botão não pode ter next e url ao mesmo tempo');
 
-export const QuickReplySchema = z.object({ label: z.string().min(1).max(20), next });
+export const QuickReplySchema = z.object({ label: z.string().min(1).max(20), next, actions: z.array(ButtonActionSchema).max(5).optional() });
 
 export const ConditionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('has_tag'), tag: z.string() }),
@@ -41,6 +51,7 @@ export const ConditionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('business_hours') }),
   z.object({ type: z.literal('is_new_contact') }),
   z.object({ type: z.literal('is_follower') }), // a pessoa segue a conta (precisa ter interagido antes)
+  z.object({ type: z.literal('clicked_link') }), // clicou em algum link deste fluxo (links rastreados)
   z.object({
     type: z.literal('last_text_matches'),
     keywords: z.array(z.string()).min(1),
@@ -81,6 +92,8 @@ export const NodeSchema = z.discriminatedUnion('type', [
       // Botões 🔒: o que quem não segue recebe, e o texto que acompanha o link liberado
       locked_text: z.string().max(1000).optional(),
       unlocked_text: z.string().max(1000).optional(),
+      // Foto enviada antes do texto (conta como 1 mensagem a mais)
+      image_url: httpUrl.optional(),
       // Salva a opção tocada (texto do botão / resposta rápida) neste campo do contato — dispensa um nó de Ação por opção
       save_to: z.string().regex(/^[a-z0-9_]+$/, 'Nome do campo: letras minúsculas, números e _').optional(),
     }),
@@ -116,6 +129,10 @@ export const NodeSchema = z.discriminatedUnion('type', [
       timeout_minutes: z.number().int().min(1).max(60 * 23).optional(),
       on_timeout: next,
       on_invalid: next, // quando estoura as tentativas
+      options: z.array(z.string().trim().min(1).max(20)).max(11).optional(), // sugestões tocáveis (aceita digitar também)
+      skip_label: z.string().trim().min(1).max(20).optional(), // botão "Pular": segue sem salvar
+      reminder_minutes: z.number().int().min(5).max(60 * 23).optional(), // lembra uma vez se não responder
+      reminder_text: z.string().max(1000).optional(),
     }),
     next,
   }),
@@ -336,6 +353,8 @@ export type ParsedPayload =
   | { type: 'trigger'; triggerId: string }
   | { type: 'gate'; versionId: string; nodeId: string }
   | { type: 'lock'; versionId: string; nodeId: string; index: number }
+  | { type: 'answer'; versionId: string; nodeId: string; index: number }
+  | { type: 'skip'; versionId: string; nodeId: string }
   | { type: 'custom'; payload: string };
 
 export const payload = {
@@ -344,6 +363,8 @@ export const payload = {
   quickReply: (v: string, n: string, i: number) => `af:q:${v}:${n}:${i}`,
   gate: (v: string, n: string) => `af:g:${v}:${n}`,
   lock: (v: string, n: string, i: number) => `af:l:${v}:${n}:${i}`,
+  answer: (v: string, n: string, i: number) => `af:a:${v}:${n}:${i}`, // sugestão da Pergunta (vale como resposta digitada)
+  skip: (v: string, n: string) => `af:s:${v}:${n}`,
   trigger: (t: string) => `af:t:${t}`,
 };
 
@@ -357,6 +378,8 @@ export function parsePayload(p: string): ParsedPayload {
     if (parts[1] === 'c' && parts.length === 6)
       return { type: 'card_button', versionId: parts[2]!, nodeId: parts[3]!, card: Number(parts[4]), index: Number(parts[5]) };
     if (parts[1] === 't' && parts.length === 3) return { type: 'trigger', triggerId: parts[2]! };
+    if (parts[1] === 'a' && parts.length === 5) return { type: 'answer', versionId: parts[2]!, nodeId: parts[3]!, index: Number(parts[4]) };
+    if (parts[1] === 's' && parts.length === 4) return { type: 'skip', versionId: parts[2]!, nodeId: parts[3]! };
     if (parts[1] === 'l' && parts.length === 5) return { type: 'lock', versionId: parts[2]!, nodeId: parts[3]!, index: Number(parts[4]) };
     if (parts[1] === 'g' && parts.length === 4) return { type: 'gate', versionId: parts[2]!, nodeId: parts[3]! };
   }

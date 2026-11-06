@@ -28,6 +28,9 @@ export interface Post {
   username: string;
   flow_name: string | null;
   flow_status: string | null;
+  /** Resultados: pessoas atendidas pela automação do post e quantas clicaram num link */
+  people?: number;
+  clicked?: number;
 }
 
 export const POST_STATUS: Record<PostStatus, { label: string; cls: string }> = {

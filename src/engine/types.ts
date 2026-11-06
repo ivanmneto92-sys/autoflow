@@ -5,6 +5,8 @@ import type { Store } from '../store/types.js';
 export type ScheduledJob =
   | { kind: 'resume_delay'; sessionId: string; waitToken: string; nodeId: string | null }
   | { kind: 'ask_timeout'; sessionId: string; waitToken: string }
+  /** Lembrete único de uma Pergunta sem resposta */
+  | { kind: 'ask_reminder'; sessionId: string; waitToken: string }
   | { kind: 'resume_quota'; sessionId: string; waitToken: string; nodeId: string }
   /** O Pix mudou de status (webhook do provedor ou consulta periódica) */
   | { kind: 'payment_update'; sessionId: string; paymentId: string };
@@ -30,6 +32,8 @@ export interface EngineDeps {
   payments?: PaymentGateway;
   now?: () => Date;
   log?: EngineLogger;
+  /** Endereço público da API: botões de link viram <linkBase>/r/<code> para contar cliques. Sem isso, links vão direto. */
+  linkBase?: string;
 }
 
 export const MAX_STEPS = 50;

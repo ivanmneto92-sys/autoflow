@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon, useLoad, useToast } from '../components/ui';
 import { api, apiUpload } from '../lib/api';
-import { prepareImage } from '../pages/Posts';
+import { prepareImage } from '../lib/image';
 import { LOCK_DEFAULTS, type FlowNode } from '../shared/schema';
 import { NODE_META } from './graph';
 
@@ -125,6 +125,54 @@ export function Inspector({ id, node, isStart, flows, onChange, onDelete, onMake
                 </Field>
               </>
             )}
+            <Field label="Sugestões para tocar (opcional)" hint="Separe por vírgula. A pessoa pode tocar numa delas ou digitar outra resposta.">
+              <input
+                className="input"
+                value={(node.data.options ?? []).join(', ')}
+                placeholder="ex.: P, M, G"
+                onChange={(e) =>
+                  set((d) => {
+                    const o = e.target.value.split(',').map((x: string) => x.trimStart().slice(0, 20));
+                    if (o.some((x: string) => x.trim())) d.options = o;
+                    else delete d.options;
+                  })
+                }
+                onBlur={() => set((d) => d.options && (d.options = d.options.map((x: string) => x.trim()).filter(Boolean)))}
+              />
+            </Field>
+            <label className="checkbox small">
+              <input type="checkbox" checked={Boolean(node.data.skip_label)} onChange={(e) => set((d) => (e.target.checked ? (d.skip_label = 'Pular') : delete d.skip_label))} />
+              Botão “Pular” (segue sem responder)
+            </label>
+            {node.data.skip_label && (
+              <input className="input" maxLength={20} value={node.data.skip_label} onChange={(e) => set((d) => (d.skip_label = e.target.value))} />
+            )}
+            <Field label="Lembrar se não responder (opcional)" hint="Manda 1 lembrete depois desse tempo, sem sair da pergunta.">
+              <select
+                className="select"
+                value={node.data.reminder_minutes ?? ''}
+                onChange={(e) =>
+                  set((d) => {
+                    if (e.target.value) d.reminder_minutes = Number(e.target.value);
+                    else {
+                      delete d.reminder_minutes;
+                      delete d.reminder_text;
+                    }
+                  })
+                }
+              >
+                <option value="">Não lembrar</option>
+                <option value="15">Depois de 15 min</option>
+                <option value="60">Depois de 1 hora</option>
+                <option value="180">Depois de 3 horas</option>
+                <option value="720">Depois de 12 horas</option>
+              </select>
+            </Field>
+            {node.data.reminder_minutes && (
+              <Field label="Texto do lembrete">
+                <TextArea value={node.data.reminder_text ?? `Ainda está aí? 😊 ${node.data.text}`} onChange={(v) => set((d) => (d.reminder_text = v))} />
+              </Field>
+            )}
             <Field label="Esperar a resposta por (minutos)" hint="Vazio = espera para sempre. Com tempo, aparece a saída “Não respondeu”.">
               <input
                 className="input"
@@ -228,6 +276,9 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
       <Field label="Texto">
         <TextArea value={node.data.text} onChange={(v) => set((d) => (d.text = v))} />
       </Field>
+      <Field label="Foto antes do texto (opcional)" hint="Conta como 1 mensagem a mais — evite na 1ª mensagem de um fluxo de comentário.">
+        <ImagePicker optional value={node.data.image_url ?? ''} onChange={(url) => set((d) => (url ? (d.image_url = url) : delete d.image_url))} />
+      </Field>
       <Field label="Opções para o cliente">
         <select
           className="select"
@@ -295,6 +346,7 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
               />
               🔒 Só para seguidores
             </label>
+            <ButtonActions actions={b.actions ?? []} onChange={(a) => set((d) => (a.length ? (d.buttons[i].actions = a) : delete d.buttons[i].actions))} isLink={b.url !== undefined} />
           </div>
         ))}
       {mode === 'buttons' && node.data.buttons!.some((b) => b.followers_only) && (
@@ -320,11 +372,14 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
       )}
       {mode === 'quick' &&
         node.data.quick_replies!.map((q, i) => (
-          <div className="row" key={i}>
-            <input className="input" value={q.label} maxLength={20} onChange={(e) => set((d) => (d.quick_replies[i].label = e.target.value))} />
-            <button className="btn btn-ghost btn-sm" onClick={() => set((d) => d.quick_replies.splice(i, 1))}>
-              <Icon name="x" />
-            </button>
+          <div key={i} className="stack-sm">
+            <div className="row">
+              <input className="input" value={q.label} maxLength={20} onChange={(e) => set((d) => (d.quick_replies[i].label = e.target.value))} />
+              <button className="btn btn-ghost btn-sm" onClick={() => set((d) => d.quick_replies.splice(i, 1))}>
+                <Icon name="x" />
+              </button>
+            </div>
+            <ButtonActions actions={q.actions ?? []} onChange={(a) => set((d) => (a.length ? (d.quick_replies[i].actions = a) : delete d.quick_replies[i].actions))} />
           </div>
         ))}
       {mode === 'quick' && node.data.quick_replies!.length < 13 && (
@@ -418,6 +473,7 @@ const COND_TYPES: [string, string][] = [
   ['business_hours', 'Está aberto agora (horário de funcionamento)'],
   ['is_new_contact', 'É um contato novo'],
   ['is_follower', 'Segue a conta no Instagram'],
+  ['clicked_link', 'Clicou em algum link deste fluxo'],
   ['has_tag', 'Tem a tag'],
   ['field_exists', 'Campo preenchido'],
   ['field_equals', 'Campo igual a'],
@@ -462,6 +518,11 @@ function ConditionForm({ node, set }: { node: Extract<FlowNode, { type: 'conditi
                 </button>
               )}
             </div>
+            {w.type === 'clicked_link' && (
+              <span className="hint">
+                Conta os cliques nos botões de link deste fluxo (últimos 3 dias). Use depois de um <b>Atraso</b> para lembrar quem não clicou.
+              </span>
+            )}
             {w.type === 'is_follower' && (
               <span className="hint">
                 A Meta só informa isso depois que a pessoa toca num botão ou escreve. Para fluxos de comentário, o mais simples é usar o bloco{' '}
@@ -731,7 +792,7 @@ function ChargeForm({ node, set }: { node: Extract<FlowNode, { type: 'charge' }>
 }
 
 /** Foto: enviar do computador (vira JPG no formato do feed) ou colar um link. */
-function ImagePicker({ value, onChange, optional }: { value: string; onChange: (url: string) => void; optional?: boolean }) {
+export function ImagePicker({ value, onChange, optional }: { value: string; onChange: (url: string) => void; optional?: boolean }) {
   const toast = useToast();
   const [progress, setProgress] = useState<number | null>(null);
   async function pick(file?: File) {
@@ -759,6 +820,56 @@ function ImagePicker({ value, onChange, optional }: { value: string; onChange: (
         </label>
       </div>
       <input className="input" placeholder={optional ? 'ou cole o link da imagem (opcional)' : 'ou cole o link da imagem'} value={value === 'https://' ? '' : value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+const BUTTON_ACTIONS: [string, string][] = [
+  ['add_tag', 'Adicionar tag'],
+  ['remove_tag', 'Remover tag'],
+  ['set_field', 'Preencher campo'],
+  ['human_handoff', 'Passar para atendente'],
+];
+
+/** Ações que rodam no toque do botão (sem precisar de um nó de Ação). */
+function ButtonActions({ actions, onChange, isLink }: { actions: any[]; onChange: (a: any[]) => void; isLink?: boolean }) {
+  const upd = (i: number, a: any) => onChange(actions.map((x, k) => (k === i ? a : x)));
+  return (
+    <div className="stack-sm" style={{ marginTop: 4 }}>
+      {actions.map((a, i) => (
+        <div key={i} className="row" style={{ gap: 6 }}>
+          <select
+            className="select"
+            style={{ maxWidth: 150 }}
+            value={a.type}
+            onChange={(e) => {
+              const t = e.target.value;
+              upd(i, t === 'set_field' ? { type: t, field: '', value: '' } : t === 'human_handoff' ? { type: t } : { type: t, tag: '' });
+            }}
+          >
+            {BUTTON_ACTIONS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          {'tag' in a && <input className="input" placeholder="tag" value={a.tag} onChange={(e) => upd(i, { ...a, tag: e.target.value })} />}
+          {a.type === 'set_field' && (
+            <>
+              <input className="input mono" placeholder="campo" value={a.field} onChange={(e) => upd(i, { ...a, field: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })} />
+              <input className="input" placeholder="valor" value={a.value} onChange={(e) => upd(i, { ...a, value: e.target.value })} />
+            </>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={() => onChange(actions.filter((_, k) => k !== i))} title="Remover ação">
+            <Icon name="x" />
+          </button>
+        </div>
+      ))}
+      {actions.length < 5 && (
+        <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', padding: '2px 6px' }} onClick={() => onChange([...actions, { type: 'add_tag', tag: '' }])}>
+          <Icon name="plus" size={14} /> Ação ao {isLink ? 'clicar' : 'tocar'}
+        </button>
+      )}
     </div>
   );
 }

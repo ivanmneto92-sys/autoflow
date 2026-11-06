@@ -50,7 +50,7 @@ export function Loading() {
   );
 }
 
-export function Modal({ title, onClose, children, footer, wide }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+export function Modal({ title, onClose, children, footer, wide }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean | number }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -58,7 +58,7 @@ export function Modal({ title, onClose, children, footer, wide }: { title: strin
   }, [onClose]);
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="card modal" style={wide ? { maxWidth: 760 } : undefined}>
+      <div className="card modal" style={wide ? { maxWidth: typeof wide === 'number' ? wide : 760 } : undefined}>
         <div className="card-header">
           <h2>{title}</h2>
           <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Fechar">

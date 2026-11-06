@@ -2,9 +2,11 @@
 import type postgres from 'postgres';
 import { config } from '../config.js';
 import { generateCode } from '../lib/coupon.js';
+import { linkCode } from '../lib/links.js';
 import { decrypt } from '../lib/crypto.js';
 import type {
   CouponResult,
+  LinkInput,
   OrderInput,
   Account,
   Contact,
@@ -322,6 +324,32 @@ export class PgStore implements Store {
       }
       throw new Error('Não consegui gerar um código de cupom único');
     });
+  }
+
+  async createLink(l: LinkInput) {
+    const [old] = await this.sql`
+      select code from autoflow.links
+      where contact_id = ${l.contactId} and flow_id = ${l.flowId} and node_id = ${l.nodeId} and url = ${l.url}
+      order by created_at desc limit 1`;
+    if (old) return old.code as string;
+    for (let i = 0; ; i++) {
+      const code = linkCode();
+      try {
+        await this.sql`
+          insert into autoflow.links (code, workspace_id, flow_id, node_id, contact_id, url, actions)
+          values (${code}, ${l.workspaceId}, ${l.flowId}, ${l.nodeId}, ${l.contactId}, ${l.url},
+                  ${l.actions?.length ? this.sql.json(l.actions as any) : null})`;
+        return code;
+      } catch (err) {
+        if ((err as { code?: string }).code !== '23505' || i >= 4) throw err;
+      }
+    }
+  }
+
+  async hasClickedLink(contactId: string, flowId: string, since: Date) {
+    const [r] = await this.sql`
+      select 1 from autoflow.links where contact_id = ${contactId} and flow_id = ${flowId} and last_clicked_at >= ${since} limit 1`;
+    return Boolean(r);
   }
 
   async logEvent(e: EventLog) {

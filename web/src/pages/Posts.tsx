@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Empty, ErrorBox, Icon, Loading, Modal, useLoad, useToast } from '../components/ui';
 import { api, apiUpload, formatDateTime } from '../lib/api';
 import { isEditable, MATCH_LABEL, POST_STATUS, postDate, postTitle, TYPE_LABEL, type Match, type MediaType, type Post } from '../lib/posts';
+import { QuickAutomation } from '../components/QuickAutomation';
+import { prepareImage } from '../lib/image';
 import { useSession } from '../lib/session';
 
 interface Account {
@@ -27,6 +29,7 @@ export function Posts() {
   const accounts = useLoad(() => api<Account[]>('/app/accounts'), [workspace?.id]);
   const flows = useLoad(() => api<Flow[]>('/app/flows'), [workspace?.id]);
   const [editing, setEditing] = useState<{ post: Post | null; when?: Date } | null>(null);
+  const [quickFor, setQuickFor] = useState<Post | null>(null);
   const [view, setView] = useState<'lista' | 'calendario'>(() => {
     try {
       return localStorage.getItem('autoflow-posts-view') === 'calendario' ? 'calendario' : 'lista';
@@ -154,10 +157,21 @@ export function Posts() {
         </div>
       ) : (
         <div className="stack">
-          <Section title="Próximas" posts={groups.upcoming} onEdit={edit} onAction={action} empty="Nada agendado." />
-          {groups.failed.length > 0 && <Section title="Com erro" posts={groups.failed} onEdit={edit} onAction={action} />}
-          {groups.done.length > 0 && <Section title="Publicadas e canceladas" posts={groups.done} onEdit={edit} onAction={action} />}
+          <Section title="Próximas" posts={groups.upcoming} onEdit={edit} onAction={action} onQuick={setQuickFor} empty="Nada agendado." />
+          {groups.failed.length > 0 && <Section title="Com erro" posts={groups.failed} onEdit={edit} onAction={action} onQuick={setQuickFor} />}
+          {groups.done.length > 0 && <Section title="Publicadas e canceladas" posts={groups.done} onEdit={edit} onAction={action} onQuick={setQuickFor} />}
         </div>
+      )}
+
+      {quickFor && (
+        <QuickAutomation
+          initialPost={quickFor}
+          onClose={() => setQuickFor(null)}
+          onCreated={() => {
+            setQuickFor(null);
+            posts.reload();
+          }}
+        />
       )}
 
       {editing && (
@@ -182,12 +196,14 @@ function Section({
   posts,
   onEdit,
   onAction,
+  onQuick,
   empty,
 }: {
   title: string;
   posts: Post[];
   onEdit: (p: Post) => void;
   onAction: (p: Post, what: 'publish-now' | 'cancel' | 'delete') => void;
+  onQuick: (p: Post) => void;
   empty?: string;
 }) {
   return (
@@ -201,7 +217,7 @@ function Section({
       ) : (
         <div>
           {posts.map((p) => (
-            <PostRow key={p.id} p={p} onEdit={onEdit} onAction={onAction} />
+            <PostRow key={p.id} p={p} onEdit={onEdit} onAction={onAction} onQuick={onQuick} />
           ))}
         </div>
       )}
@@ -209,7 +225,17 @@ function Section({
   );
 }
 
-function PostRow({ p, onEdit, onAction }: { p: Post; onEdit: (p: Post) => void; onAction: (p: Post, what: 'publish-now' | 'cancel' | 'delete') => void }) {
+function PostRow({
+  p,
+  onEdit,
+  onAction,
+  onQuick,
+}: {
+  p: Post;
+  onEdit: (p: Post) => void;
+  onAction: (p: Post, what: 'publish-now' | 'cancel' | 'delete') => void;
+  onQuick: (p: Post) => void;
+}) {
   const st = STATUS[p.status];
   const editable = p.status === 'scheduled' || p.status === 'failed' || p.status === 'cancelled';
   const a = p.automation;
@@ -234,6 +260,12 @@ function PostRow({ p, onEdit, onAction }: { p: Post; onEdit: (p: Post) => void; 
             {p.trigger_id && <span className="muted"> · gatilho ativo</span>}
           </div>
         )}
+        {a && p.status === 'published' && (p.people ?? 0) > 0 && (
+          <div className="small post-results">
+            📊 <b>{p.people}</b> {p.people === 1 ? 'pessoa atendida' : 'pessoas atendidas'}
+            {' · '}🔗 <b>{p.clicked ?? 0}</b> clicaram no link ({Math.round(((p.clicked ?? 0) / p.people!) * 100)}%)
+          </div>
+        )}
         {p.error && <div className={`alert ${p.status === 'published' ? 'alert-warning' : 'alert-danger'} small`}>{p.error}</div>}
       </div>
       <div className="post-actions">
@@ -241,6 +273,11 @@ function PostRow({ p, onEdit, onAction }: { p: Post; onEdit: (p: Post) => void; 
           <a className="btn btn-sm" href={p.permalink} target="_blank" rel="noreferrer">
             <Icon name="external" size={15} /> Ver
           </a>
+        )}
+        {editable && !a && (
+          <button className="btn btn-sm btn-primary" onClick={() => onQuick(p)} title="Responder quem comentar neste post">
+            <Icon name="zap" size={15} /> Automação
+          </button>
         )}
         {editable && (
           <button className="btn btn-sm" onClick={() => onEdit(p)}>
@@ -394,55 +431,6 @@ function Calendar({ posts, onPick, onNew }: { posts: Post[]; onPick: (p: Post) =
 // ───────────── Formulário ─────────────
 
 /** Converte a imagem para JPG (único formato aceito), corta para a proporção do feed e limita a 1440 px. */
-/**
- * Converte para JPG e ajusta a proporção. `ratio` força uma proporção exata (carrossel: todos iguais ao 1º item,
- * senão o Instagram corta os outros sozinho).
- */
-export async function prepareImage(file: File, ratio?: number): Promise<{ blob: Blob; adjusted: boolean; ratio: number }> {
-  const src = URL.createObjectURL(file);
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image();
-      i.onload = () => resolve(i);
-      i.onerror = () => reject(new Error('Não consegui abrir essa imagem. Use JPG ou PNG.'));
-      i.src = src;
-    });
-    let sw = img.naturalWidth;
-    let sh = img.naturalHeight;
-    let sx = 0;
-    let sy = 0;
-    const own = sw / sh;
-    const target = ratio ?? Math.min(1.91, Math.max(0.8, own)); // feed: entre 4:5 e 1,91:1
-    let adjusted = false;
-    if (Math.abs(own - target) > 0.01) {
-      adjusted = true;
-      if (own < target) {
-        const h = Math.round(sw / target); // mais alta que o alvo → corta em cima e embaixo
-        sy = Math.round((sh - h) / 2);
-        sh = h;
-      } else {
-        const w = Math.round(sh * target); // mais larga → corta nas laterais
-        sx = Math.round((sw - w) / 2);
-        sw = w;
-      }
-    }
-    const scale = Math.min(1, 1440 / sw);
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(sw * scale);
-    canvas.height = Math.round(sh * scale);
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#fff'; // PNG com transparência vira fundo branco
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Falha ao converter a imagem'))), 'image/jpeg', 0.9),
-    );
-    return { blob, adjusted, ratio: target };
-  } finally {
-    URL.revokeObjectURL(src);
-  }
-}
-
 async function videoDuration(file: File): Promise<number> {
   const src = URL.createObjectURL(file);
   try {
@@ -815,28 +803,15 @@ export function PostForm({
             )}
             {auto && (
               <>
-                {!usable.length && !quick ? (
+                {!usable.length ? (
                   <div className="stack-sm">
                     <p className="small" style={{ margin: 0 }}>
-                      Você ainda não tem fluxos. O caminho mais simples: agende sem marcar esta opção e, no fluxo, escolha esta publicação em{' '}
-                      <b>⚡ Quando… → Comentário em post</b>.
+                      Você ainda não tem fluxos. Crie agora a mensagem do Direct (abertura, 🔒 seguidores, link e lembrete) em 1 minuto:
                     </p>
-                    <button type="button" className="btn btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setQuick(true)}>
-                      Ou criar um fluxo rápido aqui
+                    <button type="button" className="btn btn-primary btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setQuick(true)}>
+                      <Icon name="zap" size={15} /> Criar automação rápida
                     </button>
-                  </div>
-                ) : quick ? (
-                  <QuickFlow
-                    suggestedName={postTitle({ caption, media_type: type } as Post)}
-                    canCancel
-                    onCancel={() => setQuick(false)}
-                    onCreated={(f) => {
-                      setExtra((x) => [...x, f]);
-                      setFlowId(f.id);
-                      setQuick(false);
-                    }}
-                  />
-                ) : (
+                  </div>                ) : (
                   <>
                     <div className="field">
                       <label className="label">Palavra-chave do comentário</label>
@@ -865,7 +840,7 @@ export function PostForm({
                             {f.status !== 'published' ? ' (rascunho)' : ''}
                           </option>
                         ))}
-                        <option value="__new">＋ Criar um fluxo rápido aqui</option>
+                        <option value="__new">⚡ Criar automação rápida…</option>
                       </select>
                       {flow && flow.status !== 'published' && (
                         <span className="hint" style={{ color: 'var(--warning)' }}>
@@ -888,84 +863,17 @@ export function PostForm({
           </div>
         </div>
       </div>
+      {quick && (
+        <QuickAutomation
+          mode="flow-only"
+          onClose={() => setQuick(false)}
+          onCreated={(f) => {
+            setExtra((x) => [...x, { id: f.id, name: f.name, status: 'published' }]);
+            setFlowId(f.id);
+            setQuick(false);
+          }}
+        />
+      )}
     </Modal>
-  );
-}
-
-/**
- * Fluxo rápido criado de dentro do agendador: uma mensagem no Direct (com link opcional), já publicado.
- * Quebra o "ovo e galinha" (post pede fluxo, fluxo pede post). Dá para incrementar depois no editor.
- */
-function QuickFlow({
-  suggestedName,
-  canCancel,
-  onCancel,
-  onCreated,
-}: {
-  suggestedName: string;
-  canCancel: boolean;
-  onCancel: () => void;
-  onCreated: (f: Flow) => void;
-}) {
-  const toast = useToast();
-  const [text, setText] = useState('Oi, {{first_name|tudo bem}}! 👋 Aqui está o que você pediu:');
-  const [url, setUrl] = useState('');
-  const [label, setLabel] = useState('Acessar');
-  const [busy, setBusy] = useState(false);
-
-  async function create() {
-    if (!text.trim()) return toast('Escreva a mensagem que vai no Direct.', true);
-    let link = url.trim();
-    if (link && !/^https?:\/\//i.test(link)) link = `https://${link}`;
-    setBusy(true);
-    try {
-      const name = `Post: ${suggestedName}`.slice(0, 100);
-      const f = await api<{ id: string; name: string }>('/app/flows', { body: { name } });
-      const graph = {
-        start: 'msg',
-        nodes: {
-          msg: {
-            type: 'message',
-            data: { text: text.trim(), ...(link ? { buttons: [{ label: (label.trim() || 'Acessar').slice(0, 20), url: link }] } : {}) },
-            next: null,
-          },
-        },
-      };
-      const saved = await api<{ issues: { level: string; message: string }[] }>(`/app/flows/${f.id}`, { method: 'PUT', body: { graph } });
-      const err = saved.issues.find((i) => i.level === 'error');
-      if (err) throw new Error(err.message);
-      await api(`/app/flows/${f.id}/publish`, { body: {} });
-      toast('Fluxo criado e publicado ✓');
-      onCreated({ id: f.id, name, status: 'published' });
-    } catch (e) {
-      toast((e as Error).message, true);
-    }
-    setBusy(false);
-  }
-
-  return (
-    <div className="stack-sm">
-      <div className="small">
-        <b>Fluxo rápido:</b> o que quem comentar recebe no Direct. Depois dá para melhorar em <b>Fluxos</b>.
-      </div>
-      <textarea className="input textarea" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
-      <div className="row">
-        <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link (opcional): seusite.com.br" />
-        <input className="input" style={{ maxWidth: 120 }} value={label} maxLength={20} onChange={(e) => setLabel(e.target.value)} placeholder="Texto do botão" />
-      </div>
-      <div className="row wrap">
-        <button type="button" className="btn btn-primary btn-sm" onClick={create} disabled={busy}>
-          {busy ? 'Criando…' : 'Criar e publicar fluxo'}
-        </button>
-        {canCancel && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
-            Voltar
-          </button>
-        )}
-        <a className="small" href="/modelos" target="_blank" rel="noreferrer">
-          ou use um modelo pronto ↗
-        </a>
-      </div>
-    </div>
   );
 }

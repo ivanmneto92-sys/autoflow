@@ -14,7 +14,7 @@ import { WINDOW_MS } from './types.js';
 
 export type NodeResult =
   | { type: 'next'; next: string | null | undefined }
-  | { type: 'wait_input'; timeoutMs?: number }
+  | { type: 'wait_input'; timeoutMs?: number; reminderMs?: number }
   | { type: 'wait_payment' }
   | { type: 'wait_delay'; delayMs: number; next: string | null | undefined }
   | { type: 'goto_flow'; flowId: string }
@@ -58,13 +58,38 @@ export async function renderUrl(ctx: RunContext, url: string): Promise<string> {
   );
 }
 
+/**
+ * Link rastreado: <linkBase>/r/<code>, um por contato. Conta o clique, permite lembrar quem não clicou e
+ * roda as ações do botão. Sem linkBase (ou com track_links desligado) devolve o link original.
+ */
+export async function trackUrl(ctx: RunContext, nodeId: string, url: string, actions?: unknown[]): Promise<string> {
+  const base = ctx.deps.linkBase?.replace(/\/+$/, '');
+  if (!base || ctx.account.settings.track_links === false || !/^https?:\/\//i.test(url)) return url;
+  try {
+    const code = await ctx.deps.store.createLink({
+      workspaceId: ctx.account.workspaceId,
+      flowId: ctx.session.flowId,
+      nodeId,
+      contactId: ctx.contact.id,
+      url,
+      actions,
+    });
+    return `${base}/r/${code}`;
+  } catch (err) {
+    ctx.deps.log?.warn({ err }, 'Não consegui criar o link rastreado; usando o link direto');
+    return url;
+  }
+}
+
 async function toButtons(
   ctx: RunContext,
   nodeId: string,
-  buttons: { label: string; next?: string | null; url?: string; followers_only?: boolean }[],
+  buttons: { label: string; next?: string | null; url?: string; followers_only?: boolean; actions?: unknown[] }[],
   card?: number,
 ): Promise<Button[]> {
-  const urls = await Promise.all(buttons.map((b) => (b.url ? renderUrl(ctx, b.url) : Promise.resolve(undefined))));
+  const urls = await Promise.all(
+    buttons.map(async (b) => (b.url && !(b.followers_only && card === undefined) ? trackUrl(ctx, nodeId, await renderUrl(ctx, b.url), b.actions) : undefined)),
+  );
   return buttons.map((b, i) =>
     b.followers_only && card === undefined
       ? { type: 'postback', title: b.label, payload: payload.lock(ctx.version.id, nodeId, i) } // confere antes de liberar
@@ -91,6 +116,7 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
         return unlockButton(ctx, nodeId, node, lock.i);
       }
       const text = await render(ctx, node.data.text);
+      if (node.data.image_url) await ctx.send({ kind: 'image', url: node.data.image_url }, nodeId);
       if (node.data.buttons?.length) {
         await ctx.send({ kind: 'buttons', text, buttons: await toButtons(ctx, nodeId, node.data.buttons) }, nodeId);
       } else if (node.data.quick_replies?.length) {
@@ -132,8 +158,17 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
 
     case 'ask': {
       ctx.session.vars.__retries = 0;
-      await ctx.send({ kind: 'text', text: await render(ctx, node.data.text) }, nodeId);
-      return { type: 'wait_input', timeoutMs: node.data.timeout_minutes ? node.data.timeout_minutes * 60_000 : undefined };
+      // Sugestões tocáveis (valem como resposta digitada) e o botão "Pular"
+      const quickReplies = [
+        ...(node.data.options ?? []).map((o, i) => ({ title: o, payload: payload.answer(ctx.version.id, nodeId, i) })),
+        ...(node.data.skip_label ? [{ title: node.data.skip_label, payload: payload.skip(ctx.version.id, nodeId) }] : []),
+      ];
+      await ctx.send({ kind: 'text', text: await render(ctx, node.data.text), ...(quickReplies.length ? { quickReplies } : {}) }, nodeId);
+      return {
+        type: 'wait_input',
+        timeoutMs: node.data.timeout_minutes ? node.data.timeout_minutes * 60_000 : undefined,
+        reminderMs: node.data.reminder_minutes ? node.data.reminder_minutes * 60_000 : undefined,
+      };
     }
 
     case 'follow_gate': {
@@ -217,6 +252,9 @@ async function evaluate(ctx: RunContext, c: Condition): Promise<boolean> {
       return isOpen(ctx.account.settings.business_hours, ctx.account.settings.timezone ?? 'America/Sao_Paulo', ctx.now());
     case 'is_new_contact':
       return Boolean(ctx.session.vars.__new);
+    case 'clicked_link':
+      // Clicou em algum link deste fluxo nos últimos 3 dias (links rastreados)
+      return store.hasClickedLink(ctx.contact.id, ctx.session.flowId, new Date(ctx.now().getTime() - 3 * 86_400_000));
     case 'is_follower':
       // Sem resposta da Meta (normalmente: a pessoa ainda não interagiu, só comentou) = "não segue"
       return (await checkFollower(ctx)) === true;
@@ -461,11 +499,12 @@ async function unlockButton(ctx: RunContext, nodeId: string, node: Extract<FlowN
       {
         kind: 'buttons',
         text: await render(ctx, node.data.unlocked_text || LOCK_DEFAULTS.unlocked_text),
-        buttons: [{ type: 'web_url', title: b.label, url: await renderUrl(ctx, b.url) }],
+        buttons: [{ type: 'web_url', title: b.label, url: await trackUrl(ctx, nodeId, await renderUrl(ctx, b.url), b.actions) }],
       },
       nodeId,
     );
     return { type: 'next', next: null };
   }
+  if (b.actions?.length) for (const a of b.actions) await runAction(ctx, nodeId, a);
   return { type: 'next', next: b.next };
 }

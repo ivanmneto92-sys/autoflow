@@ -84,7 +84,12 @@ export async function postRoutes(app: FastifyInstance, wsOf: (req: FastifyReques
     return sql`
       select p.id, p.ig_account_id, p.media_type, p.media, p.caption, p.scheduled_at, p.status, p.automation,
              p.trigger_id, p.ig_media_id, p.permalink, p.error, p.created_at, p.published_at,
-             a.username, a.profile_picture_url, f.name as flow_name, f.status as flow_status
+             a.username, a.profile_picture_url, f.name as flow_name, f.status as flow_status,
+             -- Resultados do post: quantas pessoas a automação atendeu e quantas clicaram num link do fluxo
+             (select count(*)::int from autoflow.trigger_fires tf where tf.trigger_id = p.trigger_id) as people,
+             (select count(distinct l.contact_id)::int from autoflow.links l
+                join autoflow.trigger_fires tf on tf.contact_id = l.contact_id and tf.trigger_id = p.trigger_id
+               where l.flow_id = (p.automation->>'flow_id')::uuid and l.first_clicked_at is not null) as clicked
       from autoflow.scheduled_posts p
       join autoflow.ig_accounts a on a.id = p.ig_account_id
       left join autoflow.flows f on f.id = (p.automation->>'flow_id')::uuid

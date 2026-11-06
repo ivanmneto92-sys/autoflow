@@ -7,6 +7,8 @@ export interface WorkspaceSettings {
   timezone?: string;
   business_hours?: BusinessHours;
   bot_pause_hours?: number;
+  /** false = botões de link vão direto (sem contar cliques). Padrão: rastreia. */
+  track_links?: boolean;
 }
 
 export interface Account {
@@ -106,6 +108,15 @@ export interface OrderInput {
   totalCents: number | null;
 }
 
+export interface LinkInput {
+  workspaceId: string;
+  flowId: string;
+  nodeId: string;
+  contactId: string;
+  url: string;
+  actions?: unknown[];
+}
+
 /** Resultado de "entregar cupom": novo, a pessoa já tinha, acabaram os códigos ou campanha inexistente/arquivada. */
 export type CouponResult =
   | { status: 'new' | 'existing'; code: string; discount: string; expiresAt: Date | null }
@@ -162,4 +173,8 @@ export interface Store {
   /** Cria um pedido com número sequencial por negócio. */
   createOrder(o: OrderInput): Promise<{ id: string; number: number }>;
   assignCoupon(workspaceId: string, campaignId: string, contactId: string): Promise<CouponResult>;
+  /** Link rastreado (reaproveita o mesmo código para o mesmo contato/nó/destino). Devolve o código. */
+  createLink(l: LinkInput): Promise<string>;
+  /** O contato clicou em algum link deste fluxo desde `since`? */
+  hasClickedLink(contactId: string, flowId: string, since: Date): Promise<boolean>;
 }

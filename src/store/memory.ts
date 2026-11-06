@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { FlowGraph } from '../flow/schema.js';
 import type {
   CouponResult,
+  LinkInput,
   OrderInput,
   Account,
   Contact,
@@ -173,6 +174,18 @@ export class MemoryStore implements Store {
     c.contactId = contactId;
     c.expiresAt = expiresAt;
     return { status: 'new', code: c.code, discount: camp.discount, expiresAt };
+  }
+
+  links: (LinkInput & { code: string; clickedAt: Date | null })[] = [];
+  async createLink(l: LinkInput) {
+    const old = this.links.find((x) => x.contactId === l.contactId && x.flowId === l.flowId && x.nodeId === l.nodeId && x.url === l.url);
+    if (old) return old.code;
+    const code = `L${this.links.length + 1}`;
+    this.links.push({ ...l, code, clickedAt: null });
+    return code;
+  }
+  async hasClickedLink(contactId: string, flowId: string, since: Date) {
+    return this.links.some((x) => x.contactId === contactId && x.flowId === flowId && x.clickedAt !== null && x.clickedAt >= since);
   }
 
   // Helpers de teste

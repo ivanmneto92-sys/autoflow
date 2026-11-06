@@ -233,6 +233,44 @@ console.log('  ✓ admin: criar/publicar fluxo, gatilho validado, stats');
   console.log('  ✓ cupons: código único por pessoa, lista esgota, baixa no balcão');
 }
 
+// ── Automação rápida + link rastreado ──
+{
+  const h = { authorization: 'Bearer panel-test-token', 'x-workspace-id': ws.id };
+  const r = await app.inject({
+    method: 'POST',
+    url: '/app/automations/comment-dm',
+    headers: h,
+    payload: {
+      target: { kind: 'any' },
+      keywords: ['guia, GUIA2'],
+      public_replies: ['Te chamei no direct!'],
+      followers_only: true,
+      message: { text: 'Aqui está 👇', links: [{ label: 'Abrir', url: 'site.com/guia' }] },
+      follow_up: { enabled: true, minutes: 30 },
+    },
+  });
+  assert.equal(r.statusCode, 200, r.body);
+  const { flow_id, trigger_id } = r.json();
+  const [f] = await sql`select status from autoflow.flows where id = ${flow_id}`;
+  const [t] = await sql`select type, config from autoflow.triggers where id = ${trigger_id}`;
+  assert.equal(f!.status, 'published');
+  assert.deepEqual([t!.type, t!.config.keywords], ['comment', ['guia', 'GUIA2']]);
+
+  const pg = new PgStore(sql);
+  const [ct] = await sql`select id from autoflow.contacts where workspace_id = ${ws.id} limit 1`;
+  const code = await pg.createLink({ workspaceId: ws.id, flowId: flow_id, nodeId: 'entrega', contactId: ct!.id, url: 'https://site.com/guia', actions: [{ type: 'add_tag', tag: 'clicou-guia' }] });
+  assert.equal(await pg.createLink({ workspaceId: ws.id, flowId: flow_id, nodeId: 'entrega', contactId: ct!.id, url: 'https://site.com/guia' }), code);
+  assert.equal(await pg.hasClickedLink(ct!.id, flow_id, new Date(Date.now() - 60_000)), false);
+  const go = await app.inject({ url: `/r/${code}` });
+  assert.equal(go.statusCode, 302);
+  assert.equal(go.headers.location, 'https://site.com/guia');
+  await new Promise((res) => setTimeout(res, 300));
+  assert.equal(await pg.hasClickedLink(ct!.id, flow_id, new Date(Date.now() - 60_000)), true);
+  assert.ok((await pg.getTags(ct!.id)).includes('clicou-guia'));
+  assert.equal((await app.inject({ url: '/r/naoexiste' })).statusCode, 404);
+  console.log('  ✓ automação rápida publicada com gatilho; link rastreado conta o clique e roda a ação');
+}
+
 await app.close();
 await inboundQueue().obliterate({ force: true });
 await scheduledQueue().close();

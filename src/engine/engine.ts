@@ -3,7 +3,7 @@
  * e executa os nós do grafo até precisar esperar (resposta, atraso, janela) ou terminar.
  */
 import { randomUUID } from 'node:crypto';
-import type { FlowGraph, FlowNode } from '../flow/schema.js';
+import type { ButtonAction, FlowGraph, FlowNode } from '../flow/schema.js';
 import { parsePayload } from '../flow/schema.js';
 import { IgApiError, type OutMessage, type Recipient } from '../instagram/client.js';
 import type { InboundEvent, Referral } from '../instagram/webhook.js';
@@ -277,6 +277,21 @@ export class Engine {
       return true;
     }
 
+    // Sugestão tocada numa Pergunta: vale como resposta digitada (segue o caminho normal da DM)
+    if (p.type === 'answer') return false;
+
+    // "Pular" da Pergunta: segue sem salvar
+    if (p.type === 'skip') {
+      const active = await store.getActiveSession(contact.id);
+      if (!active || active.status !== 'waiting_input' || active.flowVersionId !== p.versionId || active.currentNodeId !== p.nodeId) return true;
+      const version = await store.getFlowVersion(p.versionId);
+      const node = version?.graph.nodes[p.nodeId];
+      if (node?.type !== 'ask') return true;
+      delete active.vars.__retries;
+      await this.continueSession(account, contact, active, node.next ?? null, { lastText: text });
+      return true;
+    }
+
     if (p.type === 'custom') {
       const triggers = await store.listTriggers(account.workspaceId, account.id, 'postback');
       const t = triggers.find((x) => (x.config as { payload?: string }).payload === p.payload);
@@ -333,6 +348,16 @@ export class Engine {
       const label = (p.type === 'button' ? node.data.buttons?.[p.index] : node.data.quick_replies?.[p.index])?.label;
       if (label) await store.setField(contact.id, node.data.save_to, label);
     }
+    // Ações do próprio botão (tag, campo, atendente)
+    const tapped =
+      p.type === 'button' && node.type === 'message'
+        ? node.data.buttons?.[p.index]
+        : p.type === 'quick_reply' && node.type === 'message'
+          ? node.data.quick_replies?.[p.index]
+          : p.type === 'card_button' && node.type === 'carousel'
+            ? node.data.cards[p.card]?.buttons?.[p.index]
+            : undefined;
+    if (tapped?.actions?.length) await applyButtonActions(store, account.workspaceId, contact, tapped.actions, this.now(), account.settings.bot_pause_hours);
 
     await store.logEvent({
       workspaceId: account.workspaceId,
@@ -486,6 +511,19 @@ export class Engine {
       });
       return this.continueSession(account, contact, session, status === 'paid' ? (node.next ?? null) : (node.data.on_expired ?? null));
     }
+    if (job.kind === 'ask_reminder') {
+      if (session.status !== 'waiting_input') return;
+      const version = await store.getFlowVersion(session.flowVersionId);
+      const node = version?.graph.nodes[session.currentNodeId ?? ''];
+      if (!version || node?.type !== 'ask') return;
+      const ctx = this.makeCtx(account, contact, session, version);
+      try {
+        await ctx.send({ kind: 'text', text: node.data.reminder_text || `Ainda está aí? 😊 ${node.data.text}` }, session.currentNodeId!);
+      } catch {
+        /* janela fechada etc.: o lembrete é só um extra */
+      }
+      return;
+    }
     if (job.kind === 'ask_timeout') {
       if (session.status !== 'waiting_input') return;
       const version = await store.getFlowVersion(session.flowVersionId);
@@ -596,6 +634,8 @@ export class Engine {
           const waitToken = randomUUID();
           await store.updateSession(session.id, { status: 'waiting_input', currentNodeId: nodeId, vars: session.vars, waitToken });
           if (result.timeoutMs) await this.deps.scheduler.schedule({ kind: 'ask_timeout', sessionId: session.id, waitToken }, result.timeoutMs);
+          if (result.reminderMs && (!result.timeoutMs || result.reminderMs < result.timeoutMs))
+            await this.deps.scheduler.schedule({ kind: 'ask_reminder', sessionId: session.id, waitToken }, result.reminderMs);
           return;
         }
         case 'wait_delay': {
@@ -704,5 +744,26 @@ function defaultRetryText(type: string): string {
       return 'Pode enviar só o número, por favor?';
     default:
       return 'Não entendi, pode repetir?';
+  }
+}
+
+/** Ações simples de botão (tag, campo, atendente) — também usadas no clique de link rastreado. */
+export async function applyButtonActions(
+  store: EngineDeps['store'],
+  workspaceId: string,
+  contact: Contact,
+  actions: ButtonAction[],
+  now: Date,
+  pauseHours = 12,
+) {
+  for (const a of actions) {
+    if (a.type === 'add_tag') await store.addTag(workspaceId, contact.id, a.tag);
+    else if (a.type === 'remove_tag') await store.removeTag(workspaceId, contact.id, a.tag);
+    else if (a.type === 'set_field') await store.setField(contact.id, a.field, a.value);
+    else if (a.type === 'human_handoff') {
+      const until = new Date(now.getTime() + pauseHours * 3_600_000);
+      await store.updateContact(contact.id, { botPausedUntil: until });
+      await store.logEvent({ workspaceId, contactId: contact.id, type: 'human_handoff', data: { via: 'button' } });
+    }
   }
 }

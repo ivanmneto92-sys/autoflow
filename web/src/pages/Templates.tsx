@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Empty, ErrorBox, Loading, Modal, useLoad, useToast } from '../components/ui';
+import { QuickAutomation } from '../components/QuickAutomation';
+import { Empty, ErrorBox, Icon, Loading, Modal, useLoad, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { describeTrigger, TYPES, type TType } from '../lib/triggers';
 
@@ -39,6 +40,8 @@ export function Templates() {
   const cat = params.get('categoria') ?? 'all';
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<TemplateInfo | null>(null);
+  const [quick, setQuick] = useState(false);
+  const navTo = useNavigate();
 
   const all = gallery.data?.templates ?? [];
   const cats = gallery.data?.categories ?? {};
@@ -72,6 +75,17 @@ export function Templates() {
         </div>
         <input className="input" style={{ maxWidth: 260 }} placeholder="Buscar: pedido, sorteio, agenda…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+
+      <button className="card qa-banner" onClick={() => setQuick(true)}>
+        <span className="qa-banner-icon">
+          <Icon name="zap" />
+        </span>
+        <div>
+          <b>Automação rápida: Comentário → Direct</b>
+          <div className="muted small">Quem comentar a palavra recebe a resposta no post e o link no Direct — com 🔒 só seguidores, e-mail e lembrete. Pronto em 1 minuto.</div>
+        </div>
+        <span className="btn btn-primary btn-sm">Criar agora</span>
+      </button>
 
       <div className="tpl-cats">
         <button className={cat === 'all' ? 'active' : ''} onClick={() => setCat('all')}>
@@ -111,6 +125,7 @@ export function Templates() {
         </div>
       )}
 
+      {quick && <QuickAutomation onClose={() => setQuick(false)} onCreated={(f) => navTo(`/fluxos/${f.id}`)} />}
       {open && <UseTemplate t={open} category={cats[open.category] ?? ''} onClose={() => setOpen(null)} />}
     </div>
   );

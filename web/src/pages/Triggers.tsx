@@ -468,7 +468,7 @@ export function TriggerModal({
   );
 }
 
-function MediaPicker({ onClose, onPick, selected }: { onClose: () => void; onPick: (id: string) => void; selected?: string | null }) {
+export function MediaPicker({ onClose, onPick, selected }: { onClose: () => void; onPick: (id: string) => void; selected?: string | null }) {
   const accounts = useLoad(() => api<{ id: string; username: string; status: string }[]>('/app/accounts'), []);
   const acc = accounts.data?.find((a) => a.status === 'active');
   const media = useLoad(
@@ -497,7 +497,7 @@ function MediaPicker({ onClose, onPick, selected }: { onClose: () => void; onPic
   );
 }
 
-function ScheduledPicker({ onClose, onPick }: { onClose: () => void; onPick: (p: Post) => void }) {
+export function ScheduledPicker({ onClose, onPick }: { onClose: () => void; onPick: (p: Post) => void }) {
   const posts = useLoad(() => api<Post[]>('/app/posts'), []);
   const list = (posts.data ?? []).filter(isEditable).sort((a, b) => postDate(a).getTime() - postDate(b).getTime());
   return (

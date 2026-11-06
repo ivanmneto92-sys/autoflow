@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { QuickAutomation } from '../components/QuickAutomation';
 import { Empty, ErrorBox, Icon, Loading, Modal, useLoad, useToast } from '../components/ui';
 import { api, timeAgo } from '../lib/api';
 import { useSession } from '../lib/session';
@@ -21,6 +22,7 @@ export function Flows() {
   const nav = useNavigate();
   const { data, error, loading, reload } = useLoad(() => api<Flow[]>('/app/flows'), [workspace?.id]);
   const [creating, setCreating] = useState(false);
+  const [quick, setQuick] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -56,12 +58,15 @@ export function Flows() {
           <h1>Fluxos</h1>
           <p className="muted">As conversas automáticas do robô. Cada fluxo é ativado por um ou mais gatilhos.</p>
         </div>
-        <div className="row">
+        <div className="row wrap">
+          <button className="btn" onClick={() => setCreating(true)}>
+            <Icon name="plus" /> Novo fluxo
+          </button>
           <Link className="btn" to="/modelos">
             <Icon name="grid" /> Modelos prontos
           </Link>
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
-            <Icon name="plus" /> Novo fluxo
+          <button className="btn btn-primary" onClick={() => setQuick(true)}>
+            <Icon name="zap" /> Automação rápida
           </button>
         </div>
       </div>
@@ -114,10 +119,13 @@ export function Flows() {
         ) : (
           <Empty
             title="Nenhum fluxo ainda"
-            text="Comece por um modelo pronto ou crie do zero."
+            text="O jeito mais rápido: a Automação rápida responde quem comentar e manda o link no Direct em 1 minuto."
             action={
-              <div className="row" style={{ justifyContent: 'center' }}>
-                <Link className="btn btn-primary" to="/modelos">
+              <div className="row wrap" style={{ justifyContent: 'center' }}>
+                <button className="btn btn-primary" onClick={() => setQuick(true)}>
+                  <Icon name="zap" /> Automação rápida
+                </button>
+                <Link className="btn" to="/modelos">
                   <Icon name="grid" /> Ver modelos prontos
                 </Link>
                 <button className="btn" onClick={() => setCreating(true)}>
@@ -128,6 +136,8 @@ export function Flows() {
           />
         )}
       </div>
+
+      {quick && <QuickAutomation onClose={() => setQuick(false)} onCreated={(f) => nav(`/fluxos/${f.id}`)} />}
 
       {creating && (
         <Modal
