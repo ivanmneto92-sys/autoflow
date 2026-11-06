@@ -10,6 +10,7 @@ import { adminRoutes } from './routes/admin.js';
 import { appRoutes, type TokenVerifier } from './routes/app.js';
 import { authRoutes } from './routes/auth.js';
 import { mediaRoutes } from './routes/media.js';
+import { payhookRoutes } from './routes/payhooks.js';
 import { webhookRoutes } from './routes/webhooks.js';
 
 export async function buildServer(opts: { verifyToken?: TokenVerifier } = {}) {
@@ -58,6 +59,7 @@ export async function buildServer(opts: { verifyToken?: TokenVerifier } = {}) {
   await app.register(webhookRoutes);
   await app.register(authRoutes);
   await app.register(mediaRoutes);
+  await app.register(payhookRoutes);
   await app.register(adminRoutes);
   await app.register(appRoutes, { verifyToken: opts.verifyToken });
   return app;

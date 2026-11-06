@@ -177,6 +177,7 @@ export function Inspector({ id, node, isStart, flows, onChange, onDelete, onMake
         )}
 
         {node.type === 'end' && <p className="muted">Este nó encerra a conversa automática.</p>}
+        {node.type === 'charge' && <ChargeForm node={node} set={set} />}
       </div>
 
       {!isStart && (
@@ -560,5 +561,59 @@ function WhatsAppButton({ url, onChange }: { url: string; onChange: (url: string
         placeholder="Mensagem que já vai escrita (aceita {{field.nome}}, {{var.order_number}}…)"
       />
     </div>
+  );
+}
+
+function ChargeForm({ node, set }: { node: Extract<FlowNode, { type: 'charge' }>; set: (fn: (d: any) => void) => void }) {
+  const d = node.data;
+  return (
+    <>
+      <div className="field">
+        <label className="label">Valor</label>
+        <input className="input" value={d.amount} onChange={(e) => set((x) => (x.amount = e.target.value))} placeholder="ex.: 49,90 ou {{field.total}}" />
+        <span className="hint">Um valor fixo ou uma variável com o total do pedido.</span>
+      </div>
+      <div className="field">
+        <label className="label">Descrição (aparece no extrato)</label>
+        <input className="input" value={d.description} onChange={(e) => set((x) => (x.description = e.target.value))} maxLength={140} />
+      </div>
+      <div className="field">
+        <label className="label">Mensagem antes do código</label>
+        <textarea className="input textarea" rows={2} value={d.text} onChange={(e) => set((x) => (x.text = e.target.value))} />
+        <span className="hint">Depois dela vai o valor, o botão “Ver QR Code” e o código copia-e-cola numa mensagem separada.</span>
+      </div>
+      <div className="row">
+        <div className="field" style={{ flex: 1 }}>
+          <label className="label">Vence em (minutos)</label>
+          <input
+            className="input"
+            type="number"
+            min={5}
+            max={1440}
+            value={d.expires_minutes}
+            onChange={(e) => set((x) => (x.expires_minutes = Math.max(5, Math.min(1440, Number(e.target.value) || 30))))}
+          />
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label className="label">Conta</label>
+          <select className="select" value={d.provider ?? ''} onChange={(e) => set((x) => (x.provider = e.target.value || undefined))}>
+            <option value="">Padrão do negócio</option>
+            <option value="mercadopago">Mercado Pago</option>
+            <option value="asaas">Asaas</option>
+          </select>
+        </div>
+      </div>
+      {d.provider !== 'mercadopago' && (
+        <div className="field">
+          <label className="label">CPF do cliente (obrigatório no Asaas)</label>
+          <input className="input mono" value={d.cpf ?? ''} onChange={(e) => set((x) => (x.cpf = e.target.value || undefined))} placeholder="{{field.cpf}}" />
+          <span className="hint">Peça o CPF antes com uma Pergunta (salvando em “cpf”). No Mercado Pago é opcional.</span>
+        </div>
+      )}
+      <p className="hint">
+        Saída <b>✅ Pagou</b>: o pagamento caiu (confirmação automática). Saída <b>⏰ Não pagou</b>: o Pix venceu. Se houver um pedido registrado antes, ele fica marcado
+        como pago na página Pedidos. Conecte a conta de Pix em <b>Configurações</b>.
+      </p>
+    </>
   );
 }

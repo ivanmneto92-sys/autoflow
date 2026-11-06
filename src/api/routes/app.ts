@@ -16,6 +16,7 @@ import { db } from '../../lib/db.js';
 import { PgStore } from '../../store/pg.js';
 import { HttpError } from '../http.js';
 import { orderRoutes } from './orders.js';
+import { paymentRoutes } from './payments.js';
 import { postRoutes } from './posts.js';
 import { simulatorRoutes } from './simulator.js';
 
@@ -121,6 +122,7 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
   await simulatorRoutes(app, wsOf);
   await postRoutes(app, wsOf);
   await orderRoutes(app, wsOf);
+  await paymentRoutes(app, wsOf);
 
   // ───────────── Usuário e workspaces ─────────────
   app.get('/app/me', async (req) => {

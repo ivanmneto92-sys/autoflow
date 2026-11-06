@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useToast } from '../components/ui';
+import { useLoad, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { useSession } from '../lib/session';
 
@@ -123,6 +123,144 @@ export function Settings() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <PaymentsCard />
+    </div>
+  );
+}
+
+interface PayAccount {
+  provider: 'mercadopago' | 'asaas';
+  sandbox: boolean;
+  account_name: string | null;
+  webhook_url: string;
+  webhook_token?: string;
+}
+
+const PROVIDERS = {
+  mercadopago: {
+    name: 'Mercado Pago',
+    help: 'No Mercado Pago: Seu negócio → Configurações → Credenciais (ou developers.mercadopago.com → Suas integrações → Credenciais de produção). Copie o “Access Token” (começa com APP_USR-). Para testar sem dinheiro de verdade, use o das credenciais de teste.',
+  },
+  asaas: {
+    name: 'Asaas',
+    help: 'No Asaas: Integrações → Chave de API → Gerar chave. Depois cadastre o webhook abaixo em Integrações → Webhooks (evento de cobranças), com o token de autenticação mostrado aqui.',
+  },
+} as const;
+
+/** Contas de Pix do negócio (Mercado Pago / Asaas). */
+function PaymentsCard() {
+  const toast = useToast();
+  const data = useLoad(() => api<{ preferred: string | null; accounts: PayAccount[] }>('/app/payments/accounts'), []);
+  const [editing, setEditing] = useState<'mercadopago' | 'asaas' | null>(null);
+  const [token, setToken] = useState('');
+  const [sandbox, setSandbox] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const accounts = data.data?.accounts ?? [];
+
+  async function connect() {
+    if (!editing) return;
+    setBusy(true);
+    try {
+      const r = await api<{ account_name: string }>(`/app/payments/accounts/${editing}`, { method: 'PUT', body: { token, sandbox } });
+      toast(`${PROVIDERS[editing].name} conectado: ${r.account_name}`);
+      setEditing(null);
+      setToken('');
+      data.reload();
+    } catch (e) {
+      toast((e as Error).message, true);
+    }
+    setBusy(false);
+  }
+
+  async function disconnect(p: 'mercadopago' | 'asaas') {
+    if (!confirm(`Desconectar ${PROVIDERS[p].name}? Os fluxos com Pix vão parar de gerar cobrança por essa conta.`)) return;
+    await api(`/app/payments/accounts/${p}`, { method: 'DELETE' });
+    data.reload();
+  }
+
+  async function prefer(p: 'mercadopago' | 'asaas') {
+    await api('/app/payments/preferred', { method: 'PUT', body: { provider: p } });
+    data.reload();
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 14 }}>
+      <div className="card-header">
+        <div>
+          <h3>Pagamentos (Pix)</h3>
+          <p className="muted small" style={{ marginTop: 2 }}>
+            Conecte a conta do negócio. O dinheiro cai direto nela; o autoflow só gera a cobrança e confirma o pagamento.
+          </p>
+        </div>
+      </div>
+      <div className="card-body stack">
+        {(['mercadopago', 'asaas'] as const).map((p) => {
+          const acc = accounts.find((a) => a.provider === p);
+          return (
+            <div key={p} className="card card-body stack-sm" style={{ background: 'var(--surface-2)' }}>
+              <div className="row-between">
+                <div className="row">
+                  <b>{PROVIDERS[p].name}</b>
+                  {acc ? <span className="badge badge-success">Conectado · {acc.account_name}</span> : <span className="badge">Não conectado</span>}
+                  {acc?.sandbox && <span className="badge badge-warning">testes</span>}
+                  {acc && data.data?.preferred === p && <span className="badge badge-primary">padrão</span>}
+                </div>
+                <div className="row">
+                  {acc && accounts.length > 1 && data.data?.preferred !== p && (
+                    <button className="btn btn-sm" onClick={() => prefer(p)}>
+                      Usar como padrão
+                    </button>
+                  )}
+                  <button className="btn btn-sm" onClick={() => (setEditing(p), setToken(''), setSandbox(acc?.sandbox ?? false))}>
+                    {acc ? 'Trocar chave' : 'Conectar'}
+                  </button>
+                  {acc && (
+                    <button className="btn btn-sm btn-ghost" onClick={() => disconnect(p)}>
+                      Desconectar
+                    </button>
+                  )}
+                </div>
+              </div>
+              {editing === p && (
+                <div className="stack-sm">
+                  <span className="hint">{PROVIDERS[p].help}</span>
+                  <input
+                    className="input mono"
+                    type="password"
+                    autoComplete="off"
+                    placeholder={p === 'mercadopago' ? 'APP_USR-…' : '$aact_…'}
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                  />
+                  {p === 'asaas' && (
+                    <label className="checkbox small">
+                      <input type="checkbox" checked={sandbox} onChange={(e) => setSandbox(e.target.checked)} /> Chave do ambiente de testes (sandbox)
+                    </label>
+                  )}
+                  <div className="row">
+                    <button className="btn btn-primary btn-sm" onClick={connect} disabled={busy || token.trim().length < 10}>
+                      {busy ? 'Validando…' : 'Validar e salvar'}
+                    </button>
+                    <button className="btn btn-sm btn-ghost" onClick={() => setEditing(null)}>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+              {acc && p === 'asaas' && (
+                <div className="small">
+                  <div className="muted">Webhook para cadastrar no Asaas:</div>
+                  <div className="mono" style={{ wordBreak: 'break-all' }}>{acc.webhook_url}</div>
+                  <div className="muted" style={{ marginTop: 4 }}>Token de autenticação:</div>
+                  <div className="mono" style={{ wordBreak: 'break-all' }}>{acc.webhook_token}</div>
+                </div>
+              )}
+              {acc && p === 'mercadopago' && <span className="hint">As confirmações chegam sozinhas: não precisa configurar webhook.</span>}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

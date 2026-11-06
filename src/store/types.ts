@@ -39,11 +39,12 @@ export type SessionStatus =
   | 'waiting_input'
   | 'waiting_delay'
   | 'waiting_window'
+  | 'waiting_payment'
   | 'completed'
   | 'failed'
   | 'cancelled';
 
-export const ACTIVE_STATUSES: SessionStatus[] = ['running', 'waiting_input', 'waiting_delay', 'waiting_window'];
+export const ACTIVE_STATUSES: SessionStatus[] = ['running', 'waiting_input', 'waiting_delay', 'waiting_window', 'waiting_payment'];
 
 export interface Session {
   id: string;

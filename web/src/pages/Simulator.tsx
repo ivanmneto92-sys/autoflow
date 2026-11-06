@@ -16,6 +16,7 @@ interface SimState {
   messages: Msg[];
   session: { status: string; current_node_id: string | null; flow_name: string } | null;
   follows?: boolean;
+  pending_pix?: boolean;
 }
 
 const STATUS: Record<string, string> = {
@@ -23,6 +24,7 @@ const STATUS: Record<string, string> = {
   waiting_input: 'Esperando a resposta do cliente',
   waiting_delay: 'Em atraso (aguardando o tempo)',
   waiting_window: 'Esperando o cliente escrever (janela de 24h)',
+  waiting_payment: 'Esperando o pagamento do Pix',
   completed: 'Fluxo concluído',
   failed: 'Fluxo com erro',
   cancelled: 'Fluxo interrompido',
@@ -163,6 +165,21 @@ export function Simulator() {
               </div>
             ) : (
               <p className="muted">Nenhum fluxo iniciado ainda.</p>
+            )}
+            {st?.pending_pix && (
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  try {
+                    setSt(await api<SimState>('/app/simulator/pay', { body: {} }));
+                    toast('Pix simulado como pago.');
+                  } catch (e) {
+                    toast((e as Error).message, true);
+                  }
+                }}
+              >
+                💸 Simular Pix pago
+              </button>
             )}
             {paused && <div className="alert alert-warning">Robô pausado para este contato (atendimento humano). Reinicie a conversa para testar de novo.</div>}
             <div>

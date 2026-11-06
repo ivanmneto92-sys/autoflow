@@ -14,6 +14,7 @@ import type { RunContext } from './engine.js';
 export type NodeResult =
   | { type: 'next'; next: string | null | undefined }
   | { type: 'wait_input'; timeoutMs?: number }
+  | { type: 'wait_payment' }
   | { type: 'wait_delay'; delayMs: number; next: string | null | undefined }
   | { type: 'goto_flow'; flowId: string }
   | { type: 'end' };
@@ -153,6 +154,9 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
 
     case 'goto_flow':
       return { type: 'goto_flow', flowId: node.data.flow_id };
+
+    case 'charge':
+      return charge(ctx, nodeId, node);
 
     case 'end':
       return { type: 'end' };
@@ -317,4 +321,62 @@ export function parseMoney(v: string): number | null {
   else if (/^\d{1,3}(\.\d{3})+$/.test(s)) n = Number(s.replace(/\./g, ''));
   else n = Number(s);
   return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+export const brl = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/\s/g, ' ');
+
+/** Nó "Cobrar Pix": gera a cobrança, manda o código copia-e-cola e espera o pagamento. */
+async function charge(ctx: RunContext, nodeId: string, node: Extract<FlowNode, { type: 'charge' }>): Promise<NodeResult> {
+  const { store } = ctx.deps;
+  const fail = async (reason: string): Promise<NodeResult> => {
+    await store.logEvent({
+      workspaceId: ctx.account.workspaceId,
+      contactId: ctx.contact.id,
+      flowId: ctx.session.flowId,
+      sessionId: ctx.session.id,
+      nodeId,
+      type: 'charge_failed',
+      data: { reason },
+    });
+    await ctx.send({ kind: 'text', text: 'Não consegui gerar o Pix agora 😕 Já avisei a equipe, alguém vai te ajudar por aqui.' }, nodeId);
+    return { type: 'next', next: node.data.on_expired ?? null };
+  };
+
+  const amountCents = parseMoney(await render(ctx, node.data.amount));
+  if (!amountCents || amountCents <= 0) return fail(`Valor inválido: "${node.data.amount}"`);
+  if (!ctx.deps.payments) return fail('Pagamentos não configurados');
+
+  const fields = await store.getFields(ctx.contact.id);
+  let created: { paymentId: string; qrCode: string; ticketUrl?: string };
+  try {
+    created = await ctx.deps.payments.create({
+      workspaceId: ctx.account.workspaceId,
+      provider: node.data.provider,
+      simulator: ctx.account.igUserId.startsWith('sim_'),
+      amountCents,
+      description: await render(ctx, node.data.description),
+      expiresAt: new Date(ctx.now().getTime() + node.data.expires_minutes * 60_000),
+      contact: {
+        id: ctx.contact.id,
+        name: (fields.nome as string | undefined) ?? ctx.contact.name,
+        email: fields.email as string | undefined,
+        cpf: node.data.cpf ? await render(ctx, node.data.cpf) : (fields.cpf as string | undefined),
+      },
+      sessionId: ctx.session.id,
+      orderId: (ctx.session.vars.order_id as string | undefined) ?? null,
+    });
+  } catch (err) {
+    return fail((err as Error).message);
+  }
+
+  ctx.session.vars.__payment_id = created.paymentId;
+  ctx.session.vars.payment_amount = brl(amountCents);
+  const text = `${await render(ctx, node.data.text)}\n\n💰 Valor: ${brl(amountCents)}`;
+  if (created.ticketUrl) {
+    await ctx.send({ kind: 'buttons', text, buttons: [{ type: 'web_url', title: 'Ver QR Code', url: created.ticketUrl }] }, nodeId);
+  } else {
+    await ctx.send({ kind: 'text', text }, nodeId);
+  }
+  await ctx.send({ kind: 'text', text: created.qrCode }, nodeId);
+  return { type: 'wait_payment' };
 }

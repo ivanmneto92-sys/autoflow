@@ -1,10 +1,13 @@
 import type { IgClient } from '../instagram/client.js';
+import type { PaymentGateway } from '../payments/gateway.js';
 import type { Store } from '../store/types.js';
 
 export type ScheduledJob =
   | { kind: 'resume_delay'; sessionId: string; waitToken: string; nodeId: string | null }
   | { kind: 'ask_timeout'; sessionId: string; waitToken: string }
-  | { kind: 'resume_quota'; sessionId: string; waitToken: string; nodeId: string };
+  | { kind: 'resume_quota'; sessionId: string; waitToken: string; nodeId: string }
+  /** O Pix mudou de status (webhook do provedor ou consulta periódica) */
+  | { kind: 'payment_update'; sessionId: string; paymentId: string };
 
 export interface Scheduler {
   schedule(job: ScheduledJob, delayMs: number): Promise<void>;
@@ -23,6 +26,8 @@ export interface EngineDeps {
   /** Retorna true se a conta ainda tem cota de envio nesta hora. */
   consumeQuota: (accountId: string, limit: number) => Promise<boolean>;
   fetch?: typeof fetch;
+  /** Cobrança por Pix (nó "Cobrar Pix"). Sem isso o nó avisa que não há pagamento configurado. */
+  payments?: PaymentGateway;
   now?: () => Date;
   log?: EngineLogger;
 }

@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { config } from '../../config.js';
 import { createEngine } from '../../engine/factory.js';
 import { SIM_TOKEN, simFollowers } from '../../instagram/client.js';
+import { PgPaymentGateway } from '../../payments/gateway.js';
 import type { InboundEvent } from '../../instagram/webhook.js';
 import { encrypt } from '../../lib/crypto.js';
 import { db } from '../../lib/db.js';
@@ -44,7 +45,10 @@ export async function simulatorRoutes(app: FastifyInstance, wsOf: (req: FastifyR
       from autoflow.contacts c left join autoflow.contact_fields cf on cf.contact_id = c.id
       where c.workspace_id = ${ws} and c.igsid = ${igsid}`;
     const follows = simFollowers.has(igsid);
-    if (!c) return { contact: null, messages: [], session: null, follows };
+    const [pendingPix] = await sql`
+      select p.id from autoflow.payments p join autoflow.contacts c on c.id = p.contact_id
+      where p.workspace_id = ${ws} and c.igsid = ${igsid} and p.provider = 'simulador' and p.status = 'pending' limit 1`;
+    if (!c) return { contact: null, messages: [], session: null, follows, pending_pix: false };
     const messages = await sql`
       select id, direction, source, text, payload, created_at from autoflow.messages
       where contact_id = ${c.id} order by created_at, id limit 500`;
@@ -56,10 +60,35 @@ export async function simulatorRoutes(app: FastifyInstance, wsOf: (req: FastifyR
       messages,
       session: session ?? null,
       follows,
+      pending_pix: Boolean(pendingPix),
     };
   }
 
   app.get('/app/simulator', async (req) => state(wsOf(req)));
+
+  /** "Paga" o Pix pendente do simulador e continua o fluxo pelo caminho de pago. */
+  app.post('/app/simulator/pay', async (req) => {
+    const ws = wsOf(req);
+    const { igUserId, igsid } = simIds(ws);
+    const [p] = await sql`
+      select p.id, p.session_id from autoflow.payments p join autoflow.contacts c on c.id = p.contact_id
+      where p.workspace_id = ${ws} and c.igsid = ${igsid} and p.provider = 'simulador' and p.status = 'pending'
+      order by p.created_at desc limit 1`;
+    if (!p) return state(ws);
+    await new PgPaymentGateway(sql).mark(p.id as string, 'paid');
+    const key = `af:lock:${igUserId}:${igsid}`;
+    let release = await tryLock(redis(), key, 30_000);
+    for (let i = 0; !release && i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      release = await tryLock(redis(), key, 30_000);
+    }
+    try {
+      if (p.session_id) await getEngine().handleScheduled({ kind: 'payment_update', sessionId: p.session_id as string, paymentId: p.id as string });
+    } finally {
+      await release?.();
+    }
+    return state(ws);
+  });
 
   /** Marca se o "cliente" do simulador segue a conta (para testar a condição "Segue a conta"). */
   app.post('/app/simulator/follow', async (req) => {

@@ -14,9 +14,12 @@ import {
   QUEUE_MAINTENANCE,
   QUEUE_SCHEDULED,
   maintenanceQueue,
+  scheduledQueue,
   type InboundJob,
 } from '../queue/queues.js';
 import { GraphIgClient } from '../instagram/client.js';
+import { PgPaymentGateway } from '../payments/gateway.js';
+import { checkPendingPayments, expireSimulatorPayments } from '../payments/poller.js';
 import { startPublisher } from '../posts/publisher.js';
 import { PgPostRepo } from '../posts/repo.js';
 import { PgStore } from '../store/pg.js';
@@ -96,10 +99,28 @@ const publisher = startPublisher(
   cfg.PUBLISH_POLL_SECONDS * 1000,
 );
 
+// Pix pendentes: confere a cada 30 s (confirmação mesmo sem webhook) e acorda os fluxos
+const payments = new PgPaymentGateway(db());
+const enqueuePayment = async (job: ScheduledJob) => void (await scheduledQueue().add(job.kind, job));
+let checkingPayments = false;
+const paymentTimer = setInterval(async () => {
+  if (checkingPayments) return;
+  checkingPayments = true;
+  try {
+    await checkPendingPayments(db(), payments, enqueuePayment, logger);
+    await expireSimulatorPayments(db(), enqueuePayment);
+  } catch (err) {
+    logger.error({ err }, 'Erro ao conferir Pix pendentes');
+  } finally {
+    checkingPayments = false;
+  }
+}, 30_000);
+
 logger.info('Worker autoflow iniciado');
 
 async function shutdown() {
   logger.info('Encerrando worker...');
+  clearInterval(paymentTimer);
   await Promise.all([inboundWorker.close(), scheduledWorker.close(), maintenanceWorker.close(), publisher.stop()]);
   await closeDb();
   r.disconnect();

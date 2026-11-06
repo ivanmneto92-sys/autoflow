@@ -177,7 +177,7 @@ export class PgStore implements Store {
   async getActiveSession(contactId: string) {
     const [r] = await this.sql`
       select * from autoflow.sessions
-      where contact_id = ${contactId} and status in ('running','waiting_input','waiting_delay','waiting_window')
+      where contact_id = ${contactId} and status in ('running','waiting_input','waiting_delay','waiting_window','waiting_payment')
       order by started_at desc limit 1`;
     return r ? toSession(r) : null;
   }
@@ -210,7 +210,7 @@ export class PgStore implements Store {
   async cancelActiveSessions(contactId: string) {
     await this.sql`
       update autoflow.sessions set status = 'cancelled', ended_at = now(), updated_at = now()
-      where contact_id = ${contactId} and status in ('running','waiting_input','waiting_delay','waiting_window')`;
+      where contact_id = ${contactId} and status in ('running','waiting_input','waiting_delay','waiting_window','waiting_payment')`;
   }
 
   async getFlowVersion(id: string) {

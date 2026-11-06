@@ -189,6 +189,11 @@ export class Engine {
 
     const active = await store.getActiveSession(contact.id);
 
+    // Esperando o Pix e o cliente escreveu ("paguei"): confere o pagamento na hora
+    if (active?.status === 'waiting_payment' && typeof active.vars.__payment_id === 'string') {
+      await this.deps.scheduler.schedule({ kind: 'payment_update', sessionId: active.id, paymentId: active.vars.__payment_id }, 0);
+    }
+
     if (e.kind === 'dm' && active) {
       if (active.status === 'waiting_input') return this.onAnswer(account, contact, active, e.text);
       if (active.status === 'waiting_window') {
@@ -413,7 +418,7 @@ export class Engine {
   async handleScheduled(job: ScheduledJob): Promise<void> {
     const { store } = this.deps;
     const session = await store.getSession(job.sessionId);
-    if (!session || session.waitToken !== job.waitToken) return; // job antigo/cancelado
+    if (!session || ('waitToken' in job && session.waitToken !== job.waitToken)) return; // job antigo/cancelado
     const contact = await store.getContact(session.contactId);
     const account = contact ? await store.getAccountById(contact.igAccountId) : null;
     if (!contact || !account || account.status !== 'active') return;
@@ -422,6 +427,25 @@ export class Engine {
     if (job.kind === 'resume_delay' || job.kind === 'resume_quota') {
       if (session.status !== 'waiting_delay') return;
       return this.continueSession(account, contact, session, job.nodeId);
+    }
+    if (job.kind === 'payment_update') {
+      if (session.status !== 'waiting_payment' || session.vars.__payment_id !== job.paymentId) return;
+      const status = (await this.deps.payments?.refresh(job.paymentId)) ?? 'pending';
+      if (status === 'pending') return;
+      const version = await store.getFlowVersion(session.flowVersionId);
+      const node = version?.graph.nodes[session.currentNodeId ?? ''];
+      if (node?.type !== 'charge') return;
+      session.vars.payment_status = status;
+      await store.logEvent({
+        workspaceId: session.workspaceId,
+        contactId: session.contactId,
+        flowId: session.flowId,
+        sessionId: session.id,
+        nodeId: session.currentNodeId,
+        type: status === 'paid' ? 'payment_paid' : 'payment_expired',
+        data: { payment_id: job.paymentId },
+      });
+      return this.continueSession(account, contact, session, status === 'paid' ? (node.next ?? null) : (node.data.on_expired ?? null));
     }
     if (job.kind === 'ask_timeout') {
       if (session.status !== 'waiting_input') return;
@@ -543,6 +567,10 @@ export class Engine {
             { kind: 'resume_delay', sessionId: session.id, waitToken, nodeId: result.next },
             result.delayMs,
           );
+          return;
+        }
+        case 'wait_payment': {
+          await store.updateSession(session.id, { status: 'waiting_payment', currentNodeId: nodeId, vars: session.vars, waitToken: randomUUID() });
           return;
         }
         case 'goto_flow': {

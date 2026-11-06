@@ -116,6 +116,20 @@ export const NodeSchema = z.discriminatedUnion('type', [
     data: z.object({ branches: z.array(z.object({ weight: z.number().positive(), next })).min(2) }),
   }),
   z.object({ type: z.literal('goto_flow'), data: z.object({ flow_id: z.string().uuid() }) }),
+  // Cobrança por Pix: manda o código e espera o pagamento. Pago → next; venceu → on_expired
+  z.object({
+    type: z.literal('charge'),
+    data: z.object({
+      amount: z.string().trim().min(1).max(100), // "49,90" ou "{{field.total}}"
+      description: z.string().max(140).default('Pedido'),
+      provider: z.enum(['mercadopago', 'asaas']).optional(), // vazio = o padrão do negócio
+      expires_minutes: z.number().int().min(5).max(1440).default(30),
+      text: z.string().max(800).default('Para pagar, copie o código Pix abaixo e cole no app do seu banco 👇'),
+      cpf: z.string().max(100).optional(), // Asaas exige CPF: ex. {{field.cpf}}
+      on_expired: next,
+    }),
+    next,
+  }),
   z.object({ type: z.literal('end') }),
 ]);
 
@@ -144,6 +158,8 @@ export function nodeTargets(node: FlowNode): (string | null | undefined)[] {
       return [node.next, ...node.data.cards.flatMap((c) => (c.buttons ?? []).map((b) => b.next))];
     case 'ask':
       return [node.next, node.data.on_timeout, node.data.on_invalid];
+    case 'charge':
+      return [node.next, node.data.on_expired];
     case 'condition':
       return [...node.data.rules.map((r) => r.next), node.data.else];
     case 'randomizer':

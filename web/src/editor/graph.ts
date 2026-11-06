@@ -17,10 +17,11 @@ export const NODE_META: Record<NodeType, { label: string; color: string; icon: s
   delay: { label: 'Atraso', color: '#64748b', icon: '⏱', hint: 'Espera um tempo antes de seguir' },
   randomizer: { label: 'Teste A/B', color: '#ec4899', icon: '🎲', hint: 'Sorteia um caminho' },
   goto_flow: { label: 'Ir para fluxo', color: '#0f766e', icon: '↪', hint: 'Continua em outro fluxo' },
+  charge: { label: 'Cobrar Pix', color: '#16a34a', icon: '💸', hint: 'Manda o Pix e espera o pagamento' },
   end: { label: 'Fim', color: '#94a3b8', icon: '■', hint: 'Encerra o fluxo' },
 };
 
-export const PALETTE: NodeType[] = ['message', 'ask', 'condition', 'action', 'delay', 'image', 'carousel', 'randomizer', 'goto_flow', 'end'];
+export const PALETTE: NodeType[] = ['message', 'ask', 'condition', 'action', 'charge', 'delay', 'image', 'carousel', 'randomizer', 'goto_flow', 'end'];
 
 export function newNode(type: NodeType): FlowNode {
   switch (type) {
@@ -42,6 +43,18 @@ export function newNode(type: NodeType): FlowNode {
       return { type, data: { branches: [{ weight: 50, next: null }, { weight: 50, next: null }] } };
     case 'goto_flow':
       return { type, data: { flow_id: '00000000-0000-0000-0000-000000000000' } };
+    case 'charge':
+      return {
+        type,
+        data: {
+          amount: '{{field.total}}',
+          description: 'Pedido #{{var.order_number}}',
+          expires_minutes: 30,
+          text: 'Para pagar, copie o código Pix abaixo e cole no app do seu banco 👇',
+          on_expired: null,
+        },
+        next: null,
+      };
     case 'end':
       return { type };
   }
@@ -98,6 +111,11 @@ export function outputsOf(node: FlowNode): Output[] {
     case 'action':
     case 'delay':
       return [{ id: 'next', label: 'Próximo', target: node.next }];
+    case 'charge':
+      return [
+        { id: 'next', label: '✅ Pagou', target: node.next },
+        { id: 'expired', label: '⏰ Não pagou (venceu)', target: node.data.on_expired },
+      ];
     default:
       return [];
   }
@@ -113,6 +131,7 @@ export function setOutput(node: FlowNode, handle: string, target: string | null)
   else if (kind === 'card') n.data.cards[Number(a)].buttons[Number(b)].next = target;
   else if (handle === 'invalid') n.data.on_invalid = target;
   else if (handle === 'timeout') n.data.on_timeout = target;
+  else if (handle === 'expired') n.data.on_expired = target;
   else if (kind === 'rule') n.data.rules[Number(a)].next = target;
   else if (handle === 'else') n.data.else = target;
   else if (kind === 'branch') n.data.branches[Number(a)].next = target;
@@ -161,6 +180,8 @@ export function summarize(node: FlowNode): string {
       return '';
     case 'goto_flow':
       return 'Continua em outro fluxo';
+    case 'charge':
+      return `Pix de ${node.data.amount} · vence em ${node.data.expires_minutes} min`;
     case 'end':
       return 'Encerra a conversa automática';
   }
