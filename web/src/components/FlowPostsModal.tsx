@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, formatDateTime } from '../lib/api';
 import { describeAutomation, isEditable, MATCH_LABEL, POST_STATUS, postDate, postTitle, TYPE_LABEL, type Match, type Post } from '../lib/posts';
-import { ErrorBox, Loading, Modal, useLoad, useToast } from './ui';
+import { PostForm } from '../pages/Posts';
+import { ErrorBox, Icon, Loading, Modal, useLoad, useToast } from './ui';
 
 /** No editor de fluxo: mostra em quais publicações o fluxo é usado e liga ele a uma publicação agendada. */
 export function FlowPostsModal({ flowId, flowPublished, onClose }: { flowId: string; flowPublished: boolean; onClose: () => void }) {
@@ -18,6 +19,9 @@ export function FlowPostsModal({ flowId, flowPublished, onClose }: { flowId: str
   const [replies, setReplies] = useState('');
   const [once, setOnce] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const accounts = useLoad(() => (scheduling ? api<{ id: string; username: string; status: string }[]>('/app/accounts') : Promise.resolve(null)), [scheduling]);
+  const flows = useLoad(() => (scheduling ? api<{ id: string; name: string; status: string }[]>('/app/flows') : Promise.resolve(null)), [scheduling]);
 
   const chosen = candidates.find((p) => p.id === (postId || candidates[0]?.id));
 
@@ -57,6 +61,38 @@ export function FlowPostsModal({ flowId, flowPublished, onClose }: { flowId: str
     } catch (e) {
       toast((e as Error).message, true);
     }
+  }
+
+  if (scheduling) {
+    const active = (accounts.data ?? []).filter((a) => a.status === 'active');
+    if (!accounts.data || !flows.data)
+      return (
+        <Modal title="Agendar publicação" onClose={() => setScheduling(false)}>
+          <ErrorBox error={accounts.error ?? flows.error} />
+          <Loading />
+        </Modal>
+      );
+    if (!active.length)
+      return (
+        <Modal title="Agendar publicação" onClose={() => setScheduling(false)}>
+          <p>
+            Conecte uma conta do Instagram primeiro em <Link to="/instagram">Instagram</Link>.
+          </p>
+        </Modal>
+      );
+    return (
+      <PostForm
+        post={null}
+        accounts={active}
+        flows={flows.data}
+        initialFlowId={flowId}
+        onClose={() => setScheduling(false)}
+        onSaved={() => {
+          setScheduling(false);
+          posts.reload();
+        }}
+      />
+    );
   }
 
   return (
@@ -105,14 +141,16 @@ export function FlowPostsModal({ flowId, flowPublished, onClose }: { flowId: str
             )}
           </div>
 
+          <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={() => setScheduling(true)}>
+            <Icon name="calendar" /> Agendar nova publicação com este fluxo
+          </button>
+
           <div className="card card-body stack-sm" style={{ background: 'var(--surface-2)' }}>
             <div className="label" style={{ marginBottom: 0 }}>
-              Vincular a uma publicação agendada
+              Ou vincular a uma publicação já agendada
             </div>
             {!candidates.length ? (
-              <p className="small muted">
-                Nenhuma publicação agendada disponível. <Link to="/publicacoes">Agende uma em Publicações</Link>.
-              </p>
+              <p className="small muted">Nenhuma publicação agendada ainda. Use o botão acima para agendar uma já com este fluxo.</p>
             ) : (
               <>
                 <select className="select" value={chosen?.id ?? ''} onChange={(e) => setPostId(e.target.value)}>

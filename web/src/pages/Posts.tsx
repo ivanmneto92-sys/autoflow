@@ -482,13 +482,14 @@ function toLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function PostForm({
+export function PostForm({
   post,
   initialWhen,
   accounts,
   flows,
   onClose,
   onSaved,
+  initialFlowId,
 }: {
   post: Post | null;
   initialWhen?: Date;
@@ -496,9 +497,12 @@ function PostForm({
   flows: Flow[];
   onClose: () => void;
   onSaved: () => void;
+  initialFlowId?: string;
 }) {
   const toast = useToast();
-  const usable = flows.filter((f) => f.status !== 'archived');
+  const [extra, setExtra] = useState<Flow[]>([]); // fluxos criados aqui mesmo (fluxo rápido)
+  const usable = [...flows, ...extra].filter((f) => f.status !== 'archived');
+  const [quick, setQuick] = useState(false);
   const [accountId, setAccountId] = useState(post?.ig_account_id ?? accounts[0]?.id ?? '');
   const [type, setType] = useState<MediaType>(post?.media_type ?? 'IMAGE');
   const [items, setItems] = useState<MediaItem[]>(post?.media ?? []);
@@ -519,7 +523,7 @@ function PostForm({
         : defaultWhen(),
   );
   const [auto, setAuto] = useState(post ? Boolean(post.automation) : true);
-  const [flowId, setFlowId] = useState(post?.automation?.flow_id ?? usable.find((f) => f.status === 'published')?.id ?? usable[0]?.id ?? '');
+  const [flowId, setFlowId] = useState(post?.automation?.flow_id ?? initialFlowId ?? usable.find((f) => f.status === 'published')?.id ?? usable[0]?.id ?? '');
   const [keywords, setKeywords] = useState(post?.automation?.keywords.join(', ') ?? '');
   const [match, setMatch] = useState<Match>(post?.automation?.match ?? 'contains');
   const [replies, setReplies] = useState(post?.automation?.public_replies.join('\n') ?? '');
@@ -609,7 +613,7 @@ function PostForm({
   async function save() {
     if (!items.length) return toast('Envie a imagem ou o vídeo primeiro.', true);
     if (isCarousel && items.length < 2) return toast('O carrossel precisa de pelo menos 2 fotos ou vídeos.', true);
-    if (auto && !flowId) return toast('Escolha o fluxo da automação.', true);
+    if (auto && !flowId) return toast('Escolha o fluxo da automação (ou crie um rápido aqui mesmo).', true);
     const scheduled_at = mode === 'now' ? null : new Date(when).toISOString();
     if (scheduled_at && new Date(scheduled_at).getTime() < Date.now()) return toast('Escolha um horário no futuro.', true);
     const body = {
@@ -804,10 +808,17 @@ function PostForm({
             </label>
             {auto && (
               <>
-                {!usable.length ? (
-                  <p className="small">
-                    Crie um fluxo primeiro em <Link to="/fluxos">Fluxos</Link>.
-                  </p>
+                {!usable.length || quick ? (
+                  <QuickFlow
+                    suggestedName={postTitle({ caption, media_type: type } as Post)}
+                    canCancel={usable.length > 0}
+                    onCancel={() => setQuick(false)}
+                    onCreated={(f) => {
+                      setExtra((x) => [...x, f]);
+                      setFlowId(f.id);
+                      setQuick(false);
+                    }}
+                  />
                 ) : (
                   <>
                     <div className="field">
@@ -826,13 +837,18 @@ function PostForm({
                     </div>
                     <div className="field">
                       <label className="label">Fluxo enviado no Direct</label>
-                      <select className="select" value={flowId} onChange={(e) => setFlowId(e.target.value)}>
+                      <select
+                        className="select"
+                        value={flowId}
+                        onChange={(e) => (e.target.value === '__new' ? setQuick(true) : setFlowId(e.target.value))}
+                      >
                         {usable.map((f) => (
                           <option key={f.id} value={f.id}>
                             {f.name}
                             {f.status !== 'published' ? ' (rascunho)' : ''}
                           </option>
                         ))}
+                        <option value="__new">＋ Criar um fluxo rápido aqui</option>
                       </select>
                       {flow && flow.status !== 'published' && (
                         <span className="hint" style={{ color: 'var(--warning)' }}>
@@ -856,5 +872,83 @@ function PostForm({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Fluxo rápido criado de dentro do agendador: uma mensagem no Direct (com link opcional), já publicado.
+ * Quebra o "ovo e galinha" (post pede fluxo, fluxo pede post). Dá para incrementar depois no editor.
+ */
+function QuickFlow({
+  suggestedName,
+  canCancel,
+  onCancel,
+  onCreated,
+}: {
+  suggestedName: string;
+  canCancel: boolean;
+  onCancel: () => void;
+  onCreated: (f: Flow) => void;
+}) {
+  const toast = useToast();
+  const [text, setText] = useState('Oi, {{first_name|tudo bem}}! 👋 Aqui está o que você pediu:');
+  const [url, setUrl] = useState('');
+  const [label, setLabel] = useState('Acessar');
+  const [busy, setBusy] = useState(false);
+
+  async function create() {
+    if (!text.trim()) return toast('Escreva a mensagem que vai no Direct.', true);
+    let link = url.trim();
+    if (link && !/^https?:\/\//i.test(link)) link = `https://${link}`;
+    setBusy(true);
+    try {
+      const name = `Post: ${suggestedName}`.slice(0, 100);
+      const f = await api<{ id: string; name: string }>('/app/flows', { body: { name } });
+      const graph = {
+        start: 'msg',
+        nodes: {
+          msg: {
+            type: 'message',
+            data: { text: text.trim(), ...(link ? { buttons: [{ label: (label.trim() || 'Acessar').slice(0, 20), url: link }] } : {}) },
+            next: null,
+          },
+        },
+      };
+      const saved = await api<{ issues: { level: string; message: string }[] }>(`/app/flows/${f.id}`, { method: 'PUT', body: { graph } });
+      const err = saved.issues.find((i) => i.level === 'error');
+      if (err) throw new Error(err.message);
+      await api(`/app/flows/${f.id}/publish`, { body: {} });
+      toast('Fluxo criado e publicado ✓');
+      onCreated({ id: f.id, name, status: 'published' });
+    } catch (e) {
+      toast((e as Error).message, true);
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="stack-sm">
+      <div className="small">
+        <b>Fluxo rápido:</b> o que quem comentar recebe no Direct. Depois dá para melhorar em <b>Fluxos</b>.
+      </div>
+      <textarea className="input textarea" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="row">
+        <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link (opcional): seusite.com.br" />
+        <input className="input" style={{ maxWidth: 120 }} value={label} maxLength={20} onChange={(e) => setLabel(e.target.value)} placeholder="Texto do botão" />
+      </div>
+      <div className="row wrap">
+        <button type="button" className="btn btn-primary btn-sm" onClick={create} disabled={busy}>
+          {busy ? 'Criando…' : 'Criar e publicar fluxo'}
+        </button>
+        {canCancel && (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
+            Escolher um existente
+          </button>
+        )}
+        <a className="small" href="/modelos" target="_blank" rel="noreferrer">
+          ou use um modelo pronto ↗
+        </a>
+      </div>
+    </div>
   );
 }
