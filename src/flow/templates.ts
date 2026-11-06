@@ -167,6 +167,9 @@ export function templatePreview(t: Template): string[] {
           else if (a.type === 'human_handoff') out.push('👤 Passa para um atendente');
           else if (a.type === 'give_coupon') out.push('🎟 Entrega um cupom único');
         break;
+      case 'follow_gate':
+        out.push('🔒 Confere se a pessoa segue o perfil (quem não segue recebe o pedido para seguir)');
+        break;
       case 'delay':
         out.push(`⏱ Espera ${n.data.minutes >= 60 ? `${Math.round(n.data.minutes / 60)} h` : `${n.data.minutes} min`}`);
         break;

@@ -11,7 +11,7 @@ import {
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { validateGraph, type FlowGraph, type FlowNode, type GraphIssue } from '../shared/schema';
+import { immediateFromStart, SENDS_MESSAGE, validateGraph, type FlowGraph, type FlowNode, type GraphIssue } from '../shared/schema';
 import { FlowPostsModal } from '../components/FlowPostsModal';
 import { Icon, Loading, useToast } from '../components/ui';
 import { NODE_META, PALETTE, START_ID, autoLayout, newNode, removeNode, setOutput, toCanvas, uniqueId, type NodeType } from '../editor/graph';
@@ -118,16 +118,34 @@ function EditorInner() {
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const { issues, errorsByNode } = useMemo(() => {
-    if (!graph) return { issues: [] as GraphIssue[], errorsByNode: new Map<string, string[]>() };
-    const { issues } = validateGraph(graph);
-    const map = new Map<string, string[]>();
+  const fromComment = Boolean(triggers?.some((t) => t.type === 'comment')) || pendingPosts.length > 0;
+  const { issues, issuesByNode } = useMemo(() => {
+    type NodeIssue = { level: GraphIssue['level']; message: string };
+    if (!graph) return { issues: [] as GraphIssue[], issuesByNode: new Map<string, NodeIssue[]>() };
+    const issues = [...validateGraph(graph).issues];
+    // Depois de um comentário a Meta só deixa mandar 1 mensagem até a pessoa responder ou tocar num botão
+    if (fromComment) {
+      const senders = immediateFromStart(graph).filter((n) => SENDS_MESSAGE.has(graph.nodes[n]!.type));
+      for (const n of senders.slice(1))
+        issues.push({
+          level: 'warning',
+          node: n,
+          message:
+            'Fluxo de comentário: a Meta só deixa mandar 1 mensagem até a pessoa tocar num botão ou responder. Esta só chega depois disso — ligue-a no botão da mensagem anterior.',
+        });
+    }
+    const map = new Map<string, NodeIssue[]>();
     for (const i of issues) {
       const nodeId = i.node ?? i.message.match(/^nodes\.([^.]+)\./)?.[1];
-      if (nodeId && i.level === 'error') map.set(nodeId, [...(map.get(nodeId) ?? []), i.message.replace(/^nodes\.[^.]+\./, '')]);
+      if (nodeId) map.set(nodeId, [...(map.get(nodeId) ?? []), { level: i.level, message: i.message.replace(/^nodes\.[^.]+\./, '') }]);
     }
-    return { issues, errorsByNode: map };
-  }, [graph]);
+    return { issues, issuesByNode: map };
+  }, [graph, fromComment]);
+  const errorNodes = useMemo(
+    () => new Set([...issuesByNode].filter(([, l]) => l.some((i) => i.level === 'error')).map(([k]) => k)),
+    [issuesByNode],
+  );
+  const warnNodes = useMemo(() => new Set([...issuesByNode].filter(([, l]) => l.some((i) => i.level === 'warning')).map(([k]) => k)), [issuesByNode]);
 
   // Tamanho medido de cada nó. O React Flow esconde nós sem medida; como o canvas é recriado a cada
   // mudança (inclusive a cada pixel do arrasto), precisamos devolver a medida senão o nó "some" enquanto arrasta.
@@ -136,7 +154,7 @@ function EditorInner() {
 
   const canvas = useMemo(() => {
     if (!graph) return { nodes: [], edges: [] };
-    const c = toCanvas(graph, { selected, errors: new Set(errorsByNode.keys()), stats: showStats ? stats : undefined });
+    const c = toCanvas(graph, { selected, errors: errorNodes, warnings: warnNodes, stats: showStats ? stats : undefined });
     return {
       ...c,
       nodes: c.nodes.map((n) => {
@@ -145,7 +163,7 @@ function EditorInner() {
       }),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph, selected, errorsByNode, showStats, stats, dimsVersion]);
+  }, [graph, selected, errorNodes, warnNodes, showStats, stats, dimsVersion]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -251,6 +269,16 @@ function EditorInner() {
       );
       if (!ok) return;
     }
+    const warnings = issues.filter((i) => i.level === 'warning');
+    if (warnings.length) {
+      const ok = confirm(
+        `Este fluxo tem ${warnings.length} aviso(s) — algumas pessoas podem ficar sem resposta:\n\n${warnings
+          .slice(0, 5)
+          .map((w) => `• ${w.message}`)
+          .join('\n')}${warnings.length > 5 ? '\n…' : ''}\n\nPublicar mesmo assim?`,
+      );
+      if (!ok) return;
+    }
     clearTimeout(timer.current);
     await save();
     setPublishing(true);
@@ -321,6 +349,11 @@ function EditorInner() {
         <button className={`btn btn-sm ${showStats ? 'btn-primary' : ''}`} onClick={toggleStats}>
           Métricas
         </button>
+        {issues.length > errorCount && (
+          <button className="badge badge-warning" style={{ border: 0, cursor: 'pointer' }} onClick={() => setSelected(null)} title="Ver os avisos">
+            ⚠ {issues.length - errorCount} aviso(s)
+          </button>
+        )}
         {errorCount > 0 && (
           <span className="badge badge-danger" title={issues.map((i) => i.message).join('\n')}>
             {errorCount} erro(s)
@@ -387,7 +420,7 @@ function EditorInner() {
               node={selNode}
               isStart={graph.start === selected}
               flows={flows}
-              issues={errorsByNode.get(selected) ?? []}
+              issues={issuesByNode.get(selected) ?? []}
               onChange={(n) => update({ ...graph, nodes: { ...graph.nodes, [selected]: n } })}
               onDelete={() => {
                 update(removeNode(graph, selected));

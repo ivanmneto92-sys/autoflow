@@ -18,10 +18,11 @@ export const NODE_META: Record<NodeType, { label: string; color: string; icon: s
   randomizer: { label: 'Teste A/B', color: '#ec4899', icon: '🎲', hint: 'Sorteia um caminho' },
   goto_flow: { label: 'Ir para fluxo', color: '#0f766e', icon: '↪', hint: 'Continua em outro fluxo' },
   charge: { label: 'Cobrar Pix', color: '#16a34a', icon: '💸', hint: 'Manda o Pix e espera o pagamento' },
+  follow_gate: { label: 'Só seguidores', color: '#e1306c', icon: '🔒', hint: 'Só continua para quem segue o perfil' },
   end: { label: 'Fim', color: '#94a3b8', icon: '■', hint: 'Encerra o fluxo' },
 };
 
-export const PALETTE: NodeType[] = ['message', 'ask', 'condition', 'action', 'charge', 'delay', 'image', 'carousel', 'randomizer', 'goto_flow', 'end'];
+export const PALETTE: NodeType[] = ['message', 'ask', 'follow_gate', 'condition', 'action', 'charge', 'delay', 'image', 'carousel', 'randomizer', 'goto_flow', 'end'];
 
 export function newNode(type: NodeType): FlowNode {
   switch (type) {
@@ -55,6 +56,17 @@ export function newNode(type: NodeType): FlowNode {
         },
         next: null,
       };
+    case 'follow_gate':
+      return {
+        type,
+        data: {
+          text: 'Esse conteúdo é exclusivo para quem me segue. Toque no botão abaixo que eu confiro rapidinho 👇',
+          button: 'Quero receber',
+          not_following_text: 'Ainda não encontrei você entre os meus seguidores 😕\n\n1️⃣ Abra o meu perfil e toque em Seguir\n2️⃣ Volte aqui e toque em "Já sigo"',
+          retry_button: 'Já sigo',
+        },
+        next: null,
+      };
     case 'end':
       return { type };
   }
@@ -65,6 +77,9 @@ export interface Output {
   label: string;
   target: string | null | undefined;
 }
+
+/** Saídas que precisam estar ligadas (senão quem clica/cai ali fica sem resposta). */
+export const mustConnect = (o: Output) => !o.target && /^(btn|qr|card|rule|else)/.test(o.id);
 
 /** Saídas (pontos de conexão à direita) de cada nó. */
 export function outputsOf(node: FlowNode): Output[] {
@@ -111,6 +126,8 @@ export function outputsOf(node: FlowNode): Output[] {
     case 'action':
     case 'delay':
       return [{ id: 'next', label: 'Próximo', target: node.next }];
+    case 'follow_gate':
+      return [{ id: 'next', label: '✅ Segue (entrega)', target: node.next }];
     case 'charge':
       return [
         { id: 'next', label: '✅ Pagou', target: node.next },
@@ -182,6 +199,8 @@ export function summarize(node: FlowNode): string {
       return 'Continua em outro fluxo';
     case 'charge':
       return `Pix de ${node.data.amount} · vence em ${node.data.expires_minutes} min`;
+    case 'follow_gate':
+      return `${node.data.text}\n🔘 ${node.data.button}\nQuem não segue recebe o pedido para seguir e o botão “${node.data.retry_button}”.`;
     case 'end':
       return 'Encerra a conversa automática';
   }
@@ -243,7 +262,7 @@ export function autoLayout(graph: FlowGraph): Record<string, { x: number; y: num
 
 export function toCanvas(
   graph: FlowGraph,
-  opts: { selected: string | null; errors: Set<string>; stats?: Record<string, number> },
+  opts: { selected: string | null; errors: Set<string>; warnings?: Set<string>; stats?: Record<string, number> },
 ): { nodes: Node[]; edges: Edge[] } {
   const layout = { ...autoLayout(graph), ...(graph.layout ?? {}) };
   // O nó "Quando…" é largo: se estiver em cima do primeiro nó (fluxos antigos), afasta para a esquerda
@@ -261,7 +280,7 @@ export function toCanvas(
       id,
       type: 'flow',
       position: layout[id] ?? { x: 300, y: 300 },
-      data: { node, hasError: opts.errors.has(id), count: opts.stats?.[id], isStart: id === graph.start },
+      data: { node, hasError: opts.errors.has(id), hasWarning: opts.warnings?.has(id) ?? false, count: opts.stats?.[id], isStart: id === graph.start },
       selected: id === opts.selected,
     });
     for (const o of outputsOf(node)) {

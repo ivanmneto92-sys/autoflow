@@ -13,7 +13,7 @@ type Props = {
   onChange: (n: FlowNode) => void;
   onDelete: () => void;
   onMakeStart: () => void;
-  issues: string[];
+  issues: { level: 'error' | 'warning'; message: string }[];
 };
 
 const VARS = ['{{first_name}}', '{{username}}', '{{field.nome}}', '{{first_name|amigo}}'];
@@ -76,8 +76,8 @@ export function Inspector({ id, node, isStart, flows, onChange, onDelete, onMake
       {issues.length > 0 && (
         <div className="inspector-section">
           {issues.map((i, k) => (
-            <div key={k} className="alert alert-danger small" style={{ marginBottom: 6 }}>
-              {i}
+            <div key={k} className={`alert ${i.level === 'error' ? 'alert-danger' : 'alert-warning'} small`} style={{ marginBottom: 6 }}>
+              {i.message}
             </div>
           ))}
         </div>
@@ -133,6 +133,30 @@ export function Inspector({ id, node, isStart, flows, onChange, onDelete, onMake
                 onChange={(e) => set((d) => (d.timeout_minutes = e.target.value ? Number(e.target.value) : undefined))}
               />
             </Field>
+          </>
+        )}
+
+        {node.type === 'follow_gate' && (
+          <>
+            <div className="alert alert-info small">
+              A Meta só informa se a pessoa segue <b>depois que ela toca num botão ou escreve</b>. Por isso este bloco pede um toque, confere e só segue
+              para quem segue. Quem não segue recebe o pedido para seguir e o botão para tentar de novo — ninguém fica sem resposta.
+            </div>
+            <Field label="Mensagem pedindo o toque" hint="Vai como a primeira mensagem (por exemplo, a resposta ao comentário).">
+              <TextArea value={node.data.text} onChange={(v) => set((d) => (d.text = v))} />
+            </Field>
+            <Field label="Texto do botão">
+              <input className="input" maxLength={20} value={node.data.button} onChange={(e) => set((d) => (d.button = e.target.value))} />
+            </Field>
+            <Field label="Mensagem para quem ainda não segue">
+              <TextArea value={node.data.not_following_text} onChange={(v) => set((d) => (d.not_following_text = v))} />
+            </Field>
+            <Field label="Botão para tentar de novo" hint="Junto vai um botão “Abrir perfil” com o link do seu Instagram.">
+              <input className="input" maxLength={20} value={node.data.retry_button} onChange={(e) => set((d) => (d.retry_button = e.target.value))} />
+            </Field>
+            <span className="hint">
+              Ligue a saída <b>✅ Segue</b> ao conteúdo (mensagem com o link, cupom etc.). Quem já segue e já tinha conversado recebe direto, sem precisar tocar.
+            </span>
           </>
         )}
 
@@ -394,8 +418,8 @@ function ConditionForm({ node, set }: { node: Extract<FlowNode, { type: 'conditi
             </div>
             {w.type === 'is_follower' && (
               <span className="hint">
-                A Meta só informa isso depois que a pessoa interage. Em fluxos de comentário, coloque antes uma mensagem com botão (ex.: “Já te sigo ✅”) e
-                ligue o botão nesta condição.
+                A Meta só informa isso depois que a pessoa toca num botão ou escreve. Para fluxos de comentário, o mais simples é usar o bloco{' '}
+                <b>🔒 Só seguidores</b> (na lista à esquerda). Se usar esta condição, ligue-a no botão de uma mensagem, nunca logo depois do comentário.
               </span>
             )}
             {'tag' in w && <input className="input" placeholder="nome-da-tag" value={w.tag} onChange={(e) => set((d) => (d.rules[i].when.tag = e.target.value))} />}

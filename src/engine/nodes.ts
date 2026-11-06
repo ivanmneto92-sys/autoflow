@@ -10,6 +10,7 @@ import { isOpen } from '../lib/businessHours.js';
 import { matchAny, normalize } from '../lib/text.js';
 import { renderTemplate } from '../lib/template.js';
 import type { RunContext } from './engine.js';
+import { WINDOW_MS } from './types.js';
 
 export type NodeResult =
   | { type: 'next'; next: string | null | undefined }
@@ -127,6 +128,30 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
       return { type: 'wait_input', timeoutMs: node.data.timeout_minutes ? node.data.timeout_minutes * 60_000 : undefined };
     }
 
+    case 'follow_gate': {
+      const clicked = ctx.session.vars.__gate === nodeId;
+      delete ctx.session.vars.__gate;
+      const gateButton = (title: string): Button => ({ type: 'postback', title, payload: payload.gate(ctx.version.id, nodeId) });
+      // A Meta só responde "segue?" depois que a pessoa interage (clique ou mensagem nas últimas 24 h)
+      const last = ctx.contact.lastInboundAt?.getTime() ?? 0;
+      const interacted = clicked || (!ctx.privateReplyCommentId && ctx.now().getTime() - last < WINDOW_MS);
+      if (!interacted) {
+        await ctx.send({ kind: 'buttons', text: await render(ctx, node.data.text), buttons: [gateButton(node.data.button)] }, nodeId);
+        return { type: 'next', next: null }; // continua quando ela tocar no botão
+      }
+      const follows = await checkFollower(ctx);
+      // Erro da Meta mesmo depois do clique (ex.: permissão): não prende o cliente — entrega e registra
+      if (follows !== false) {
+        ctx.session.vars.is_follower = follows ? 'sim' : 'desconhecido';
+        return { type: 'next', next: node.next };
+      }
+      ctx.session.vars.is_follower = 'nao';
+      const buttons: Button[] = [gateButton(node.data.retry_button)];
+      if (ctx.account.username) buttons.push({ type: 'web_url', title: 'Abrir perfil', url: `https://www.instagram.com/${ctx.account.username}/` });
+      await ctx.send({ kind: 'buttons', text: await render(ctx, node.data.not_following_text), buttons }, nodeId);
+      return { type: 'next', next: null };
+    }
+
     case 'condition': {
       for (const rule of node.data.rules) {
         if (await evaluate(ctx, rule.when)) return { type: 'next', next: rule.next };
@@ -184,23 +209,9 @@ async function evaluate(ctx: RunContext, c: Condition): Promise<boolean> {
       return isOpen(ctx.account.settings.business_hours, ctx.account.settings.timezone ?? 'America/Sao_Paulo', ctx.now());
     case 'is_new_contact':
       return Boolean(ctx.session.vars.__new);
-    case 'is_follower': {
-      try {
-        const token = await store.getAccessToken(ctx.account.id);
-        return await ctx.deps.ig.getFollowStatus(token, ctx.contact.igsid);
-      } catch (err) {
-        // Normalmente: a pessoa ainda não interagiu (só comentou). Trata como "não segue" e registra o motivo.
-        await store.logEvent({
-          workspaceId: ctx.account.workspaceId,
-          contactId: ctx.contact.id,
-          flowId: ctx.version.flowId,
-          nodeId: ctx.session.currentNodeId ?? null,
-          type: 'follow_check_failed',
-          data: { message: (err as Error).message },
-        });
-        return false;
-      }
-    }
+    case 'is_follower':
+      // Sem resposta da Meta (normalmente: a pessoa ainda não interagiu, só comentou) = "não segue"
+      return (await checkFollower(ctx)) === true;
     case 'last_text_matches':
       return matchAny(String(ctx.session.vars.__last_text ?? ''), c.keywords, c.match);
   }
@@ -402,4 +413,23 @@ async function charge(ctx: RunContext, nodeId: string, node: Extract<FlowNode, {
   }
   await ctx.send({ kind: 'text', text: created.qrCode }, nodeId);
   return { type: 'wait_payment' };
+}
+
+/** Pergunta à Meta se o contato segue a conta. null = não deu para saber (fica registrado em follow_check_failed). */
+async function checkFollower(ctx: RunContext): Promise<boolean | null> {
+  const { store } = ctx.deps;
+  try {
+    const token = await store.getAccessToken(ctx.account.id);
+    return await ctx.deps.ig.getFollowStatus(token, ctx.contact.igsid);
+  } catch (err) {
+    await store.logEvent({
+      workspaceId: ctx.account.workspaceId,
+      contactId: ctx.contact.id,
+      flowId: ctx.version.flowId,
+      nodeId: ctx.session.currentNodeId ?? null,
+      type: 'follow_check_failed',
+      data: { message: (err as Error).message },
+    });
+    return null;
+  }
 }

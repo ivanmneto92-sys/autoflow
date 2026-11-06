@@ -522,7 +522,8 @@ export function PostForm({
         ? toLocalInput(initialWhen)
         : defaultWhen(),
   );
-  const [auto, setAuto] = useState(post ? Boolean(post.automation) : true);
+  // Padrão: só agenda o post; o fluxo escolhe a publicação depois (⚡ Quando… → Comentário em post)
+  const [auto, setAuto] = useState(post ? Boolean(post.automation) : Boolean(initialFlowId));
   const [flowId, setFlowId] = useState(post?.automation?.flow_id ?? initialFlowId ?? usable.find((f) => f.status === 'published')?.id ?? usable[0]?.id ?? '');
   const [keywords, setKeywords] = useState(post?.automation?.keywords.join(', ') ?? '');
   const [match, setMatch] = useState<Match>(post?.automation?.match ?? 'contains');
@@ -806,12 +807,28 @@ export function PostForm({
             <label className="checkbox" style={{ fontWeight: 600 }}>
               <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Responder quem comentar
             </label>
+            {!auto && (
+              <p className="small muted" style={{ margin: 0 }}>
+                Pode agendar só a publicação. Depois, no fluxo, clique em <b>⚡ Quando… → + Novo gatilho → Comentário em post</b> e escolha esta
+                publicação.
+              </p>
+            )}
             {auto && (
               <>
-                {!usable.length || quick ? (
+                {!usable.length && !quick ? (
+                  <div className="stack-sm">
+                    <p className="small" style={{ margin: 0 }}>
+                      Você ainda não tem fluxos. O caminho mais simples: agende sem marcar esta opção e, no fluxo, escolha esta publicação em{' '}
+                      <b>⚡ Quando… → Comentário em post</b>.
+                    </p>
+                    <button type="button" className="btn btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setQuick(true)}>
+                      Ou criar um fluxo rápido aqui
+                    </button>
+                  </div>
+                ) : quick ? (
                   <QuickFlow
                     suggestedName={postTitle({ caption, media_type: type } as Post)}
-                    canCancel={usable.length > 0}
+                    canCancel
                     onCancel={() => setQuick(false)}
                     onCreated={(f) => {
                       setExtra((x) => [...x, f]);
@@ -942,7 +959,7 @@ function QuickFlow({
         </button>
         {canCancel && (
           <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
-            Escolher um existente
+            Voltar
           </button>
         )}
         <a className="small" href="/modelos" target="_blank" rel="noreferrer">

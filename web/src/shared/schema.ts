@@ -133,6 +133,23 @@ export const NodeSchema = z.discriminatedUnion('type', [
     }),
     next,
   }),
+  // Só seguidores: a Meta só deixa conferir se a pessoa segue depois que ela interage (clica ou escreve).
+  // Então o bloco pede um clique, confere e só segue em frente para quem segue; quem não segue recebe
+  // o pedido para seguir com o botão "Já sigo" (nunca fica sem resposta).
+  z.object({
+    type: z.literal('follow_gate'),
+    data: z.object({
+      text: z.string().min(1).max(1000).default('Esse conteúdo é exclusivo para quem me segue. Toque no botão abaixo que eu confiro rapidinho 👇'),
+      button: z.string().trim().min(1).max(20).default('Quero receber'),
+      not_following_text: z
+        .string()
+        .min(1)
+        .max(1000)
+        .default('Ainda não encontrei você entre os meus seguidores 😕\n\n1️⃣ Abra o meu perfil e toque em Seguir\n2️⃣ Volte aqui e toque em "Já sigo"'),
+      retry_button: z.string().trim().min(1).max(20).default('Já sigo'),
+    }),
+    next,
+  }),
   z.object({ type: z.literal('end') }),
 ]);
 
@@ -170,11 +187,46 @@ export function nodeTargets(node: FlowNode): (string | null | undefined)[] {
     case 'image':
     case 'action':
     case 'delay':
+    case 'follow_gate':
       return [node.next];
     default:
       return [];
   }
 }
+
+/** Ligações que o motor segue sem esperar a pessoa (sem clique, resposta ou pagamento). */
+function immediateTargets(node: FlowNode): (string | null | undefined)[] {
+  switch (node.type) {
+    case 'message':
+    case 'carousel':
+    case 'image':
+    case 'action':
+    case 'delay':
+      return [node.next];
+    case 'condition':
+      return [...node.data.rules.map((r) => r.next), node.data.else];
+    case 'randomizer':
+      return node.data.branches.map((b) => b.next);
+    default:
+      return []; // ask, charge e follow_gate esperam a pessoa
+  }
+}
+
+/** Nós executados logo no início, antes de a pessoa clicar ou responder qualquer coisa. */
+export function immediateFromStart(graph: FlowGraph): string[] {
+  const seen: string[] = [];
+  const stack = [graph.start];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (seen.includes(id) || !graph.nodes[id]) continue;
+    seen.push(id);
+    for (const t of immediateTargets(graph.nodes[id]!)) if (t) stack.push(t);
+  }
+  return seen;
+}
+
+/** Nós que mandam mensagem (contam para o limite de 1 mensagem depois de um comentário). */
+export const SENDS_MESSAGE = new Set<FlowNode['type']>(['message', 'image', 'carousel', 'ask', 'charge', 'follow_gate']);
 
 export interface GraphIssue {
   level: 'error' | 'warning';
@@ -206,8 +258,41 @@ export function validateGraph(input: unknown): { graph?: FlowGraph; issues: Grap
       if (node.data.buttons?.length && node.data.quick_replies?.length)
         issues.push({ level: 'error', node: id, message: 'Use botões OU respostas rápidas, não os dois' });
       for (const b of node.data.buttons ?? [])
-        if (!b.next && !b.url) issues.push({ level: 'warning', node: id, message: `Botão "${b.label}" sem destino` });
+        if (!b.next && !b.url)
+          issues.push({ level: 'warning', node: id, message: `Botão "${b.label}" não está ligado a nada: quem clicar não recebe resposta` });
+      for (const q of node.data.quick_replies ?? [])
+        if (!q.next) issues.push({ level: 'warning', node: id, message: `Resposta rápida "${q.label}" não está ligada a nada: quem tocar não recebe resposta` });
     }
+    if (node.type === 'carousel')
+      for (const c of node.data.cards)
+        for (const b of c.buttons ?? [])
+          if (!b.next && !b.url)
+            issues.push({ level: 'warning', node: id, message: `Botão "${b.label}" (${c.title}) não está ligado a nada: quem clicar não recebe resposta` });
+    if (node.type === 'condition') {
+      node.data.rules.forEach((r, i) => {
+        if (!r.next)
+          issues.push({
+            level: 'warning',
+            node: id,
+            message: `O caminho "${node.data.rules.length > 1 ? `regra ${i + 1}` : 'Se…'}" não está ligado a nada: quem cair nele fica sem resposta`,
+          });
+      });
+      if (!node.data.else) issues.push({ level: 'warning', node: id, message: 'O caminho "Senão" não está ligado a nada: quem cair nele fica sem resposta' });
+    }
+    if (node.type === 'follow_gate' && !node.next)
+      issues.push({ level: 'warning', node: id, message: 'Ligue a saída "Segue" ao conteúdo que o seguidor vai receber' });
+  }
+
+  // Conferir "segue a conta" antes de qualquer clique: a Meta não deixa (a pessoa só comentou) e o fluxo vai pelo "Senão"
+  for (const id of immediateFromStart(graph)) {
+    const n = graph.nodes[id]!;
+    if (n.type === 'condition' && n.data.rules.some((r) => r.when.type === 'is_follower'))
+      issues.push({
+        level: 'warning',
+        node: id,
+        message:
+          'A Meta só deixa conferir se a pessoa segue depois que ela clica num botão ou escreve. Aqui a checagem acontece antes disso e cai sempre no "Senão" — use o bloco 🔒 Só seguidores ou ligue esta condição no botão.',
+      });
   }
 
   // Nós inalcançáveis
@@ -235,12 +320,14 @@ export type ParsedPayload =
   | { type: 'card_button'; versionId: string; nodeId: string; card: number; index: number }
   | { type: 'quick_reply'; versionId: string; nodeId: string; index: number }
   | { type: 'trigger'; triggerId: string }
+  | { type: 'gate'; versionId: string; nodeId: string }
   | { type: 'custom'; payload: string };
 
 export const payload = {
   button: (v: string, n: string, i: number) => `af:b:${v}:${n}:${i}`,
   cardButton: (v: string, n: string, c: number, i: number) => `af:c:${v}:${n}:${c}:${i}`,
   quickReply: (v: string, n: string, i: number) => `af:q:${v}:${n}:${i}`,
+  gate: (v: string, n: string) => `af:g:${v}:${n}`,
   trigger: (t: string) => `af:t:${t}`,
 };
 
@@ -254,6 +341,7 @@ export function parsePayload(p: string): ParsedPayload {
     if (parts[1] === 'c' && parts.length === 6)
       return { type: 'card_button', versionId: parts[2]!, nodeId: parts[3]!, card: Number(parts[4]), index: Number(parts[5]) };
     if (parts[1] === 't' && parts.length === 3) return { type: 'trigger', triggerId: parts[2]! };
+    if (parts[1] === 'g' && parts.length === 4) return { type: 'gate', versionId: parts[2]!, nodeId: parts[3]! };
   }
   return { type: 'custom', payload: p };
 }

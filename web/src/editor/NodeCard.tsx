@@ -3,15 +3,15 @@ import { createContext, useContext } from 'react';
 import { describeAutomation, type Post } from '../lib/posts';
 import { describeTrigger, TYPES, type Trigger } from '../lib/triggers';
 import type { FlowNode } from '../shared/schema';
-import { NODE_META, outputsOf, summarize } from './graph';
+import { mustConnect, NODE_META, outputsOf, summarize } from './graph';
 
 export function FlowNodeCard({ data, selected }: NodeProps) {
-  const { node, hasError, count, isStart } = data as { node: FlowNode; hasError: boolean; count?: number; isStart: boolean };
+  const { node, hasError, hasWarning, count, isStart } = data as { node: FlowNode; hasError: boolean; hasWarning?: boolean; count?: number; isStart: boolean };
   const meta = NODE_META[node.type];
   const outs = outputsOf(node);
   const text = summarize(node);
   return (
-    <div className={`fnode ${selected ? 'selected' : ''} ${hasError ? 'has-error' : ''}`}>
+    <div className={`fnode ${selected ? 'selected' : ''} ${hasError ? 'has-error' : hasWarning ? 'has-warning' : ''}`}>
       <Handle type="target" position={Position.Left} style={{ top: 20 }} />
       <div className="fnode-head">
         <span className="fnode-icon" style={{ background: meta.color }}>
@@ -35,7 +35,8 @@ export function FlowNodeCard({ data, selected }: NodeProps) {
       {outs.length > 0 && (
         <div className="fnode-outs">
           {outs.map((o) => (
-            <div className="fnode-out" key={o.id}>
+            <div className={`fnode-out ${mustConnect(o) ? 'loose' : ''}`} key={o.id} title={mustConnect(o) ? 'Não está ligado: arraste a bolinha até o próximo passo' : undefined}>
+              {mustConnect(o) && <span className="loose-tag">⚠ solto</span>}
               {o.label}
               <Handle type="source" position={Position.Right} id={o.id} style={{ top: '50%', right: -6 }} />
             </div>

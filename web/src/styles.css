@@ -387,3 +387,8 @@ p { margin: 0; }
 .carousel-nav { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: rgba(0, 0, 0, 0.6); color: #fff; border-radius: 99px; padding: 3px 6px; font-size: 13px; font-weight: 600; }
 .carousel-nav button { background: none; border: 0; color: #fff; font-size: 18px; cursor: pointer; padding: 0 6px; }
 .carousel-nav button:disabled { opacity: 0.3; cursor: default; }
+
+/* Avisos no editor de fluxo */
+.fnode.has-warning { border-color: var(--warning); }
+.fnode-out.loose { color: var(--warning); }
+.loose-tag { font-size: 10.5px; font-weight: 700; margin-right: 6px; background: color-mix(in srgb, var(--warning) 18%, transparent); padding: 1px 6px; border-radius: 99px; }
