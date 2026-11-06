@@ -1,6 +1,12 @@
 {
   "name": "Só para seguidores",
   "description": "Quem comentar recebe o conteúdo só se seguir a conta; quem não segue recebe o passo a passo para seguir e tentar de novo.",
+  "category": "geral",
+  "icon": "🔒",
+  "tags": [
+    "seguidores",
+    "comentário"
+  ],
   "flow": {
     "start": "pede_clique",
     "nodes": {
@@ -8,13 +14,25 @@
         "type": "message",
         "data": {
           "text": "Oi, {{first_name|tudo bem}}! 👋 Esse conteúdo é exclusivo para quem me segue. Toca no botão abaixo que eu confiro rapidinho 👇",
-          "buttons": [{ "label": "Quero receber", "next": "checa_seguidor" }]
+          "buttons": [
+            {
+              "label": "Quero receber",
+              "next": "checa_seguidor"
+            }
+          ]
         }
       },
       "checa_seguidor": {
         "type": "condition",
         "data": {
-          "rules": [{ "when": { "type": "is_follower" }, "next": "entrega" }],
+          "rules": [
+            {
+              "when": {
+                "type": "is_follower"
+              },
+              "next": "entrega"
+            }
+          ],
           "else": "nao_segue"
         }
       },
@@ -22,14 +40,24 @@
         "type": "message",
         "data": {
           "text": "Prontinho! 🎉 Obrigado por me seguir. Aqui está o seu acesso:",
-          "buttons": [{ "label": "Acessar agora", "url": "https://seusite.com.br" }]
+          "buttons": [
+            {
+              "label": "Acessar agora",
+              "url": "https://seusite.com.br"
+            }
+          ]
         }
       },
       "nao_segue": {
         "type": "message",
         "data": {
           "text": "Ainda não encontrei você entre os meus seguidores 😕\n\n1️⃣ Abra o meu perfil e toque em Seguir\n2️⃣ Volte aqui e toque no botão abaixo",
-          "buttons": [{ "label": "Pronto, já sigo", "next": "checa_seguidor" }]
+          "buttons": [
+            {
+              "label": "Pronto, já sigo",
+              "next": "checa_seguidor"
+            }
+          ]
         }
       }
     }
@@ -40,9 +68,14 @@
       "priority": 10,
       "config": {
         "media_id": null,
-        "keywords": ["quero"],
+        "keywords": [
+          "quero"
+        ],
         "match": "contains",
-        "public_replies": ["Te chamei no direct! 📩", "Corre no direct 😉"],
+        "public_replies": [
+          "Te chamei no direct! 📩",
+          "Corre no direct 😉"
+        ],
         "once_per_contact": false
       }
     }

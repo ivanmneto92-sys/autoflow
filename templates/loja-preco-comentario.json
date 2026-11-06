@@ -1,0 +1,86 @@
+{
+  "name": "“Quanto custa?” pelo comentário",
+  "description": "Responde em público e manda o preço e o link de compra no Direct para quem pergunta o valor.",
+  "category": "loja",
+  "icon": "🏷",
+  "tags": [
+    "comentário",
+    "venda"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "produto",
+      "label": "Produto do post",
+      "type": "text",
+      "placeholder": "ex.: Vestido midi floral",
+      "required": true
+    },
+    {
+      "key": "preco",
+      "label": "Valor (R$)",
+      "type": "money",
+      "placeholder": "49,90"
+    },
+    {
+      "key": "link_compra",
+      "label": "Link para comprar",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    },
+    {
+      "key": "whatsapp",
+      "label": "WhatsApp do negócio",
+      "type": "phone",
+      "placeholder": "31 99999-9999"
+    }
+  ],
+  "flow": {
+    "start": "preco",
+    "nodes": {
+      "preco": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 😍 O [[produto]] sai por [[preco]].",
+          "buttons": [
+            {
+              "label": "Comprar agora",
+              "url": "[[link_compra]]"
+            },
+            {
+              "label": "Tirar dúvida",
+              "url": "https://wa.me/[[whatsapp]]?text=Olá! Quero saber mais sobre o [[produto]] 😊"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "preço",
+          "preco",
+          "valor",
+          "quanto",
+          "qnt",
+          "link"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te mandei no Direct! 📩",
+          "Já te respondi no Direct 😉"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

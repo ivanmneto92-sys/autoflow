@@ -1,6 +1,13 @@
 {
   "name": "Restaurante — Atendimento e Pedido",
   "description": "Boas-vindas com botões, cardápio, checagem de horário, coleta de dados do pedido e passagem para atendente.",
+  "category": "restaurante",
+  "icon": "🍕",
+  "tags": [
+    "pedido",
+    "cardápio",
+    "delivery"
+  ],
   "flow": {
     "start": "boas_vindas",
     "nodes": {

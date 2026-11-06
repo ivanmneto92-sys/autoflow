@@ -1,0 +1,99 @@
+{
+  "name": "Lista de documentos",
+  "description": "Envia a lista de documentos para o primeiro atendimento e orienta a trazê-los no dia.",
+  "category": "advogado",
+  "icon": "📂",
+  "tags": [
+    "orientação"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "documentos",
+      "label": "Documentos necessários",
+      "type": "textarea",
+      "placeholder": "ex.: RG e CPF\nComprovante de residência\nCarteira de trabalho",
+      "required": true
+    }
+  ],
+  "flow": {
+    "start": "lista",
+    "nodes": {
+      "lista": {
+        "type": "message",
+        "data": {
+          "text": "Olá, {{first_name|tudo bem}}. Para o atendimento no escritório [[negocio]], separe:\n\n[[documentos]]\n\nTraga no dia do atendimento. Por segurança, não envie documentos por aqui.",
+          "buttons": [
+            {
+              "label": "Agendar atendimento",
+              "next": "nome"
+            }
+          ]
+        }
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Qual é o seu nome?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "Telefone com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "create_order",
+              "summary": "Pedido de atendimento",
+              "fields": [
+                "nome",
+                "telefone"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Registrado. A equipe entra em contato para agendar."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "documentos",
+          "documento",
+          "o que levar"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

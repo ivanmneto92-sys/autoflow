@@ -1,0 +1,68 @@
+{
+  "name": "Link no Direct pelo comentário",
+  "description": "O clássico: quem comenta a palavra recebe o link no Direct (e a resposta pública aumenta o engajamento do post).",
+  "category": "influenciador",
+  "icon": "🔗",
+  "tags": [
+    "comentário",
+    "link"
+  ],
+  "inputs": [
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "LINK",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "o_que",
+      "label": "O que é o link",
+      "type": "text",
+      "placeholder": "ex.: o tênis do vídeo / o cupom / o material",
+      "required": true
+    },
+    {
+      "key": "link",
+      "label": "Link",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    }
+  ],
+  "flow": {
+    "start": "envia",
+    "nodes": {
+      "envia": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 💜 Aqui está [[o_que]]:",
+          "buttons": [
+            {
+              "label": "Abrir",
+              "url": "[[link]]"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te mandei no Direct! 📩",
+          "Olha seu Direct 💜",
+          "Enviado! 🔗"
+        ],
+        "once_per_contact": true
+      }
+    }
+  ]
+}

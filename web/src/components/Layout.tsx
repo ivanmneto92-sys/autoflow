@@ -7,6 +7,7 @@ import { Icon, useToast } from './ui';
 const items = [
   { to: '/', label: 'Painel', icon: 'home', end: true },
   { to: '/fluxos', label: 'Fluxos', icon: 'flow' },
+  { to: '/modelos', label: 'Modelos prontos', icon: 'grid' },
   { to: '/gatilhos', label: 'Gatilhos', icon: 'zap' },
   { to: '/publicacoes', label: 'Publicações', icon: 'calendar' },
   { to: '/simulador', label: 'Simulador', icon: 'play' },

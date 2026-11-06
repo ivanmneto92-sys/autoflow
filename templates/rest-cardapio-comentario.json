@@ -1,0 +1,75 @@
+{
+  "name": "Cardápio pelo comentário",
+  "description": "Quem comenta “cardápio” recebe o link no Direct e um botão para pedir no WhatsApp.",
+  "category": "restaurante",
+  "icon": "📋",
+  "tags": [
+    "comentário",
+    "cardápio"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "cardápio, cardapio, menu",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "cardapio",
+      "label": "Link do cardápio",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    },
+    {
+      "key": "whatsapp",
+      "label": "WhatsApp do negócio",
+      "type": "phone",
+      "placeholder": "31 99999-9999"
+    }
+  ],
+  "flow": {
+    "start": "envia",
+    "nodes": {
+      "envia": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 😋 Aqui está o cardápio da [[negocio]]:",
+          "buttons": [
+            {
+              "label": "Ver cardápio",
+              "url": "[[cardapio]]"
+            },
+            {
+              "label": "Pedir no WhatsApp",
+              "url": "https://wa.me/[[whatsapp]]?text=Olá! Vi o cardápio no Instagram e quero fazer um pedido 😋"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te mandei o cardápio no Direct! 📩",
+          "Corre no Direct 😋"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

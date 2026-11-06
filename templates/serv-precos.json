@@ -1,0 +1,131 @@
+{
+  "name": "Tabela de preços",
+  "description": "Quem pergunta os valores recebe a tabela e já pode pedir um horário.",
+  "category": "servicos",
+  "icon": "💲",
+  "tags": [
+    "preços"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "tabela",
+      "label": "Tabela de preços",
+      "type": "textarea",
+      "placeholder": "ex.: Corte R$ 40\nBarba R$ 30\nCorte + barba R$ 60",
+      "required": true
+    },
+    {
+      "key": "whatsapp",
+      "label": "WhatsApp do negócio",
+      "type": "phone",
+      "placeholder": "31 99999-9999"
+    }
+  ],
+  "flow": {
+    "start": "tabela",
+    "nodes": {
+      "tabela": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 💲 Nossos valores na [[negocio]]:\n\n[[tabela]]",
+          "buttons": [
+            {
+              "label": "Quero agendar",
+              "next": "nome"
+            },
+            {
+              "label": "Falar no WhatsApp",
+              "url": "https://wa.me/[[whatsapp]]?text=Olá! Vim pelo Instagram 😊"
+            }
+          ]
+        }
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Show! Qual é o seu nome?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "quando"
+      },
+      "quando": {
+        "type": "ask",
+        "data": {
+          "text": "Qual serviço e qual dia/horário você prefere?",
+          "save_to": "preferencia",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "agendamento"
+            },
+            {
+              "type": "create_order",
+              "summary": "Agendamento: {{field.preferencia}}",
+              "fields": [
+                "nome",
+                "preferencia"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Anotado, {{field.nome}}! ✅ Já já confirmamos o horário por aqui."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "preço",
+          "preco",
+          "valor",
+          "valores",
+          "quanto"
+        ],
+        "match": "contains"
+      }
+    },
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "preço",
+          "valor",
+          "quanto"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+{
+  "name": "Pedido de agendamento",
+  "description": "Para salão, barbearia, estética, clínica: coleta serviço, dia, horário e contato; a equipe confirma pela página Pedidos.",
+  "category": "servicos",
+  "icon": "📅",
+  "tags": [
+    "agendamento"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "servicos",
+      "label": "Serviços oferecidos (separe por vírgula)",
+      "type": "text",
+      "placeholder": "ex.: Corte, Barba, Coloração",
+      "required": true
+    }
+  ],
+  "flow": {
+    "start": "servico",
+    "nodes": {
+      "servico": {
+        "type": "ask",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 📅 Vamos agendar. Qual serviço você quer? ([[servicos]])",
+          "save_to": "servico",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "dia"
+      },
+      "dia": {
+        "type": "ask",
+        "data": {
+          "text": "Qual dia fica melhor pra você?",
+          "save_to": "dia",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "hora"
+      },
+      "hora": {
+        "type": "ask",
+        "data": {
+          "text": "E o horário de preferência?",
+          "save_to": "horario",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "nome"
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Seu nome:",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "E um telefone com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 60,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "agendamento"
+            },
+            {
+              "type": "create_order",
+              "summary": "Agendamento: {{field.servico}} — {{field.dia}} às {{field.horario}}",
+              "fields": [
+                "nome",
+                "telefone",
+                "servico",
+                "dia",
+                "horario"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Pedido de agendamento #{{var.order_number}} recebido, {{field.nome}}! ✅\n\n✂️ {{field.servico}}\n📅 {{field.dia}} às {{field.horario}}\n\nA [[negocio]] confirma a disponibilidade por aqui em breve."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "agendar",
+          "agenda",
+          "horário",
+          "horario",
+          "marcar"
+        ],
+        "match": "contains"
+      }
+    },
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "agendar",
+          "quero agendar"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "name": "Avaliar meu imóvel",
+  "description": "Para quem quer vender ou alugar: coleta endereço, tipo e contato para a avaliação.",
+  "category": "imobiliaria",
+  "icon": "📐",
+  "tags": [
+    "captação"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    }
+  ],
+  "flow": {
+    "start": "tipo",
+    "nodes": {
+      "tipo": {
+        "type": "ask",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 📐 Vamos avaliar seu imóvel. É casa, apartamento, lote ou comercial?",
+          "save_to": "tipo_imovel",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "endereco"
+      },
+      "endereco": {
+        "type": "ask",
+        "data": {
+          "text": "Em qual endereço/bairro?",
+          "save_to": "endereco",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "objetivo"
+      },
+      "objetivo": {
+        "type": "ask",
+        "data": {
+          "text": "Você quer vender ou alugar?",
+          "save_to": "objetivo",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "nome"
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Seu nome:",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "WhatsApp com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "captacao"
+            },
+            {
+              "type": "create_order",
+              "summary": "Avaliação: {{field.tipo_imovel}} — {{field.endereco}} ({{field.objetivo}})",
+              "fields": [
+                "nome",
+                "telefone",
+                "tipo_imovel",
+                "endereco",
+                "objetivo"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Recebido ✅ Um corretor da [[negocio]] vai agendar a avaliação com você."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "avaliar",
+          "avaliação",
+          "vender meu",
+          "anunciar"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

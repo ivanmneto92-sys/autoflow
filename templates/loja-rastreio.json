@@ -1,0 +1,99 @@
+{
+  "name": "Onde está meu pedido?",
+  "description": "Pede o número do pedido, manda o link de rastreio e avisa a equipe se a pessoa ainda precisar de ajuda.",
+  "category": "loja",
+  "icon": "📦",
+  "tags": [
+    "pós-venda",
+    "entrega"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "link_rastreio",
+      "label": "Link de rastreio",
+      "type": "url",
+      "placeholder": "https://rastreamento.correios.com.br"
+    }
+  ],
+  "flow": {
+    "start": "numero",
+    "nodes": {
+      "numero": {
+        "type": "ask",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 📦 Me passa o número do seu pedido ou o código de rastreio:",
+          "save_to": "pedido_numero",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "link"
+      },
+      "link": {
+        "type": "message",
+        "data": {
+          "text": "Você consegue acompanhar a entrega por aqui 👇",
+          "buttons": [
+            {
+              "label": "Rastrear",
+              "url": "[[link_rastreio]]"
+            },
+            {
+              "label": "Preciso de ajuda",
+              "next": "ajuda"
+            }
+          ]
+        }
+      },
+      "ajuda": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "suporte-entrega"
+            },
+            {
+              "type": "create_order",
+              "summary": "Ajuda com entrega: pedido {{field.pedido_numero}}",
+              "fields": [
+                "pedido_numero"
+              ]
+            },
+            {
+              "type": "human_handoff"
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Certo! A equipe da [[negocio]] vai verificar e te responde aqui 😉"
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "rastreio",
+          "rastrear",
+          "meu pedido",
+          "entrega",
+          "chegou"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

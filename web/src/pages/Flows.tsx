@@ -20,18 +20,15 @@ export function Flows() {
   const toast = useToast();
   const nav = useNavigate();
   const { data, error, loading, reload } = useLoad(() => api<Flow[]>('/app/flows'), [workspace?.id]);
-  const templates = useLoad(() => api<{ id: string; name: string; description: string }[]>('/app/templates'), []);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
-  const [template, setTemplate] = useState<string>('');
-  const [withTriggers, setWithTriggers] = useState(true);
   const [busy, setBusy] = useState(false);
 
   async function create() {
     setBusy(true);
     try {
       const f = await api<{ id: string }>('/app/flows', {
-        body: { name: name || 'Novo fluxo', template_id: template || undefined, create_triggers: Boolean(template) && withTriggers },
+        body: { name: name || 'Novo fluxo' },
       });
       nav(`/fluxos/${f.id}`);
     } catch (e) {
@@ -59,9 +56,14 @@ export function Flows() {
           <h1>Fluxos</h1>
           <p className="muted">As conversas automáticas do robô. Cada fluxo é ativado por um ou mais gatilhos.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>
-          <Icon name="plus" /> Novo fluxo
-        </button>
+        <div className="row">
+          <Link className="btn" to="/modelos">
+            <Icon name="grid" /> Modelos prontos
+          </Link>
+          <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            <Icon name="plus" /> Novo fluxo
+          </button>
+        </div>
       </div>
       <ErrorBox error={error} />
       <div className="card">
@@ -114,9 +116,14 @@ export function Flows() {
             title="Nenhum fluxo ainda"
             text="Comece por um modelo pronto ou crie do zero."
             action={
-              <button className="btn btn-primary" onClick={() => setCreating(true)}>
-                <Icon name="plus" /> Novo fluxo
-              </button>
+              <div className="row" style={{ justifyContent: 'center' }}>
+                <Link className="btn btn-primary" to="/modelos">
+                  <Icon name="grid" /> Ver modelos prontos
+                </Link>
+                <button className="btn" onClick={() => setCreating(true)}>
+                  <Icon name="plus" /> Criar do zero
+                </button>
+              </div>
             }
           />
         )}
@@ -124,7 +131,7 @@ export function Flows() {
 
       {creating && (
         <Modal
-          title="Novo fluxo"
+          title="Novo fluxo em branco"
           onClose={() => setCreating(false)}
           footer={
             <>
@@ -142,33 +149,14 @@ export function Flows() {
               <label className="label">Nome</label>
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Atendimento e pedidos" autoFocus />
             </div>
-            <div className="field">
-              <label className="label">Começar de</label>
-              <div className="stack-sm">
-                <label className="card card-body checkbox" style={{ padding: 12 }}>
-                  <input type="radio" checked={!template} onChange={() => setTemplate('')} />
-                  <div>
-                    <div style={{ fontWeight: 600 }}>Em branco</div>
-                    <div className="muted small">Só uma mensagem de boas-vindas.</div>
-                  </div>
-                </label>
-                {templates.data?.map((t) => (
-                  <label key={t.id} className="card card-body checkbox" style={{ padding: 12 }}>
-                    <input type="radio" checked={template === t.id} onChange={() => setTemplate(t.id)} />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{t.name}</div>
-                      <div className="muted small">{t.description}</div>
-                    </div>
-                  </label>
-                ))}
+            <Link to="/modelos" className="card card-body tpl-shortcut">
+              <span style={{ fontSize: 24 }}>✨</span>
+              <div>
+                <div style={{ fontWeight: 600 }}>Prefere começar de um modelo pronto?</div>
+                <div className="muted small">Dezenas de fluxos para restaurante, loja, serviços, criadores, advogados, contadores e imobiliárias.</div>
               </div>
-            </div>
-            {template && (
-              <label className="checkbox">
-                <input type="checkbox" checked={withTriggers} onChange={(e) => setWithTriggers(e.target.checked)} />
-                Criar também os gatilhos sugeridos do modelo
-              </label>
-            )}
+              <Icon name="external" size={16} />
+            </Link>
           </div>
         </Modal>
       )}

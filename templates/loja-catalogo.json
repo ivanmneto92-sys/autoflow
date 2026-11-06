@@ -1,0 +1,86 @@
+{
+  "name": "Catálogo no Direct",
+  "description": "Quem pede o catálogo recebe o link e as categorias principais, com atalho para o WhatsApp.",
+  "category": "loja",
+  "icon": "🛍",
+  "tags": [
+    "catálogo"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "catalogo",
+      "label": "Link do catálogo",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    },
+    {
+      "key": "destaques",
+      "label": "Destaques da semana",
+      "type": "textarea",
+      "placeholder": "ex.: Coleção verão com 20% off",
+      "required": true
+    },
+    {
+      "key": "whatsapp",
+      "label": "WhatsApp do negócio",
+      "type": "phone",
+      "placeholder": "31 99999-9999"
+    }
+  ],
+  "flow": {
+    "start": "envia",
+    "nodes": {
+      "envia": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🛍 Aqui está o catálogo da [[negocio]]:\n\n✨ [[destaques]]",
+          "buttons": [
+            {
+              "label": "Ver catálogo",
+              "url": "[[catalogo]]"
+            },
+            {
+              "label": "Comprar no WhatsApp",
+              "url": "https://wa.me/[[whatsapp]]?text=Olá! Vi o catálogo no Instagram e quero comprar 🛍"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "catálogo",
+          "catalogo",
+          "produtos"
+        ],
+        "match": "contains"
+      }
+    },
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "catálogo",
+          "catalogo"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

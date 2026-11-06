@@ -1,0 +1,199 @@
+{
+  "name": "Pesquisa de satisfação",
+  "description": "Pergunta a nota de 1 a 5; nota baixa pede o motivo e avisa a equipe, nota alta convida a avaliar no Google.",
+  "category": "geral",
+  "icon": "⭐",
+  "tags": [
+    "pós-venda",
+    "avaliação"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "link_avaliacao",
+      "label": "Link para avaliar (Google, iFood…)",
+      "type": "url",
+      "placeholder": "https://g.page/r/..."
+    }
+  ],
+  "flow": {
+    "start": "nota",
+    "nodes": {
+      "nota": {
+        "type": "message",
+        "data": {
+          "text": "Sua opinião é muito importante pra [[negocio]] 💜 De 1 a 5, que nota você dá pra sua experiência?",
+          "quick_replies": [
+            {
+              "label": "5 😍",
+              "next": "n5"
+            },
+            {
+              "label": "4 🙂",
+              "next": "n4"
+            },
+            {
+              "label": "3 😐",
+              "next": "n3"
+            },
+            {
+              "label": "2 😕",
+              "next": "n2"
+            },
+            {
+              "label": "1 😞",
+              "next": "n1"
+            }
+          ]
+        }
+      },
+      "n5": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "nota",
+              "value": "5"
+            },
+            {
+              "type": "add_tag",
+              "tag": "promotor"
+            }
+          ]
+        },
+        "next": "avaliar"
+      },
+      "n4": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "nota",
+              "value": "4"
+            }
+          ]
+        },
+        "next": "avaliar"
+      },
+      "n3": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "nota",
+              "value": "3"
+            }
+          ]
+        },
+        "next": "motivo"
+      },
+      "n2": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "nota",
+              "value": "2"
+            },
+            {
+              "type": "add_tag",
+              "tag": "insatisfeito"
+            }
+          ]
+        },
+        "next": "motivo"
+      },
+      "n1": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "nota",
+              "value": "1"
+            },
+            {
+              "type": "add_tag",
+              "tag": "insatisfeito"
+            }
+          ]
+        },
+        "next": "motivo"
+      },
+      "avaliar": {
+        "type": "message",
+        "data": {
+          "text": "Que bom! 🙌 Se puder, deixa sua avaliação pra ajudar a gente a crescer:",
+          "buttons": [
+            {
+              "label": "Avaliar agora",
+              "url": "[[link_avaliacao]]"
+            }
+          ]
+        }
+      },
+      "motivo": {
+        "type": "ask",
+        "data": {
+          "text": "Poxa, sentimos muito 😔 O que podemos melhorar?",
+          "save_to": "motivo",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "create_order",
+              "summary": "Avaliação {{field.nota}}/5: {{field.motivo}}",
+              "fields": [
+                "nota",
+                "motivo"
+              ]
+            }
+          ]
+        },
+        "next": "obrigado"
+      },
+      "obrigado": {
+        "type": "message",
+        "data": {
+          "text": "Obrigado por contar pra gente. A equipe vai ver isso com carinho 💜"
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "ref_link",
+      "priority": 10,
+      "config": {
+        "ref": "avaliacao"
+      }
+    },
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "avaliar",
+          "avaliação",
+          "avaliacao"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

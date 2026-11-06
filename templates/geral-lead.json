@@ -1,0 +1,124 @@
+{
+  "name": "Captar contato pelo comentário",
+  "description": "Quem comenta a palavra recebe o pedido de nome, WhatsApp e e-mail; o contato vai para Pedidos com a tag “lead”.",
+  "category": "geral",
+  "icon": "📇",
+  "tags": [
+    "lead",
+    "comentário"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "QUERO",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "oferta",
+      "label": "O que a pessoa recebe ao deixar o contato",
+      "type": "text",
+      "placeholder": "ex.: uma condição especial / o material completo",
+      "required": true
+    }
+  ],
+  "flow": {
+    "start": "abre",
+    "nodes": {
+      "abre": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 👋 Que bom que você quer saber mais. Pra te mandar [[oferta]], preciso de 3 informações rapidinho:"
+        },
+        "next": "nome"
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Qual é o seu nome?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "Seu WhatsApp com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 60,
+          "on_invalid": "email",
+          "retry_text": "Hmm, não reconheci o número. Manda com DDD, ex.: 31 99999-9999"
+        },
+        "next": "email"
+      },
+      "email": {
+        "type": "ask",
+        "data": {
+          "text": "E seu melhor e-mail:",
+          "save_to": "email",
+          "validate": "email",
+          "max_retries": 2,
+          "timeout_minutes": 60,
+          "on_invalid": "salva",
+          "retry_text": "Esse e-mail parece incompleto. Pode mandar de novo?"
+        },
+        "next": "salva"
+      },
+      "salva": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "lead"
+            },
+            {
+              "type": "create_order",
+              "summary": "Novo contato: {{field.nome}}",
+              "fields": [
+                "nome",
+                "telefone",
+                "email"
+              ]
+            }
+          ]
+        },
+        "next": "fim"
+      },
+      "fim": {
+        "type": "message",
+        "data": {
+          "text": "Prontinho, {{field.nome}}! ✅ A equipe da [[negocio]] vai te enviar [[oferta]] em breve."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

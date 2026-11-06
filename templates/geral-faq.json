@@ -1,0 +1,138 @@
+{
+  "name": "Perguntas frequentes",
+  "description": "Menu com as dúvidas mais comuns (horário, endereço, formas de pagamento) e a opção de falar com alguém.",
+  "category": "geral",
+  "icon": "❓",
+  "tags": [
+    "faq"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "horario",
+      "label": "Horário de funcionamento",
+      "type": "text",
+      "placeholder": "ex.: terça a domingo, 18h às 23h",
+      "required": true
+    },
+    {
+      "key": "endereco",
+      "label": "Endereço",
+      "type": "text",
+      "placeholder": "ex.: Rua das Flores, 120 - Centro, BH",
+      "required": true
+    },
+    {
+      "key": "pagamentos",
+      "label": "Formas de pagamento",
+      "type": "text",
+      "placeholder": "ex.: Pix, cartão e dinheiro",
+      "required": true
+    }
+  ],
+  "flow": {
+    "start": "menu",
+    "nodes": {
+      "menu": {
+        "type": "message",
+        "data": {
+          "text": "Sobre o que você quer saber? 👇",
+          "quick_replies": [
+            {
+              "label": "Horário",
+              "next": "horario"
+            },
+            {
+              "label": "Endereço",
+              "next": "endereco"
+            },
+            {
+              "label": "Pagamento",
+              "next": "pagamento"
+            },
+            {
+              "label": "Falar com alguém",
+              "next": "humano"
+            }
+          ]
+        }
+      },
+      "horario": {
+        "type": "message",
+        "data": {
+          "text": "🕐 Nosso horário: [[horario]]",
+          "buttons": [
+            {
+              "label": "Outra dúvida",
+              "next": "menu"
+            }
+          ]
+        }
+      },
+      "endereco": {
+        "type": "message",
+        "data": {
+          "text": "📍 Estamos em: [[endereco]]",
+          "buttons": [
+            {
+              "label": "Outra dúvida",
+              "next": "menu"
+            }
+          ]
+        }
+      },
+      "pagamento": {
+        "type": "message",
+        "data": {
+          "text": "💳 Aceitamos: [[pagamentos]]",
+          "buttons": [
+            {
+              "label": "Outra dúvida",
+              "next": "menu"
+            }
+          ]
+        }
+      },
+      "humano": {
+        "type": "message",
+        "data": {
+          "text": "Certo! Alguém da [[negocio]] vai te responder por aqui 😉"
+        },
+        "next": "pausa"
+      },
+      "pausa": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "human_handoff"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "dúvida",
+          "duvida",
+          "horário",
+          "horario",
+          "endereço",
+          "endereco",
+          "onde fica",
+          "pagamento"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

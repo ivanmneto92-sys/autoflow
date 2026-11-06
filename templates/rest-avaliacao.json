@@ -1,0 +1,105 @@
+{
+  "name": "Avaliação depois do pedido",
+  "description": "Mande o link (ig.me com ref “avaliacao”) depois da entrega: quem gostou vai para o Google/iFood, quem não gostou conta o motivo.",
+  "category": "restaurante",
+  "icon": "⭐",
+  "tags": [
+    "pós-venda",
+    "avaliação"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "link_avaliacao",
+      "label": "Link para avaliar (Google, iFood…)",
+      "type": "url",
+      "placeholder": "https://g.page/r/..."
+    }
+  ],
+  "flow": {
+    "start": "nota",
+    "nodes": {
+      "nota": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! Como estava seu pedido da [[negocio]]? 😋",
+          "quick_replies": [
+            {
+              "label": "Perfeito 😍",
+              "next": "bom"
+            },
+            {
+              "label": "Bom 🙂",
+              "next": "bom"
+            },
+            {
+              "label": "Pode melhorar 😕",
+              "next": "ruim"
+            }
+          ]
+        }
+      },
+      "bom": {
+        "type": "message",
+        "data": {
+          "text": "Que alegria! 🙌 Ajuda a gente com uma avaliação? Leva 10 segundos:",
+          "buttons": [
+            {
+              "label": "Avaliar",
+              "url": "[[link_avaliacao]]"
+            }
+          ]
+        }
+      },
+      "ruim": {
+        "type": "ask",
+        "data": {
+          "text": "Poxa 😔 Conta pra gente o que aconteceu, pra gente corrigir:",
+          "save_to": "motivo",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "reclamacao"
+            },
+            {
+              "type": "create_order",
+              "summary": "Reclamação: {{field.motivo}}",
+              "fields": [
+                "motivo"
+              ]
+            }
+          ]
+        },
+        "next": "obrigado"
+      },
+      "obrigado": {
+        "type": "message",
+        "data": {
+          "text": "Obrigado por avisar. A equipe vai entrar em contato 💜"
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "ref_link",
+      "priority": 10,
+      "config": {
+        "ref": "avaliacao"
+      }
+    }
+  ]
+}

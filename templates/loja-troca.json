@@ -1,0 +1,103 @@
+{
+  "name": "Troca e devolução",
+  "description": "Organiza pedidos de troca: número do pedido, motivo e informa o prazo; tudo vai para a página Pedidos.",
+  "category": "loja",
+  "icon": "🔁",
+  "tags": [
+    "pós-venda"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "prazo",
+      "label": "Regra de troca",
+      "type": "textarea",
+      "placeholder": "ex.: Trocas em até 7 dias após o recebimento, com etiqueta.",
+      "required": true
+    }
+  ],
+  "flow": {
+    "start": "numero",
+    "nodes": {
+      "numero": {
+        "type": "ask",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! Vamos resolver 😉 Qual é o número do seu pedido?",
+          "save_to": "pedido_numero",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "motivo"
+      },
+      "motivo": {
+        "type": "ask",
+        "data": {
+          "text": "Qual o motivo da troca/devolução? (tamanho, defeito, outro…)",
+          "save_to": "motivo",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "troca"
+            },
+            {
+              "type": "create_order",
+              "summary": "Troca/devolução do pedido {{field.pedido_numero}}: {{field.motivo}}",
+              "fields": [
+                "pedido_numero",
+                "motivo"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Recebido ✅ Nossa política: [[prazo]]\n\nA equipe da [[negocio]] vai te orientar por aqui."
+        },
+        "next": "pausa"
+      },
+      "pausa": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "human_handoff"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "troca",
+          "trocar",
+          "devolução",
+          "devolucao",
+          "devolver"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "name": "Promoção do dia",
+  "description": "Quem comenta a palavra da promoção recebe os detalhes e já pode pedir no WhatsApp.",
+  "category": "restaurante",
+  "icon": "🔥",
+  "tags": [
+    "promoção",
+    "comentário"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "PROMO",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "promocao",
+      "label": "Descrição da promoção",
+      "type": "textarea",
+      "placeholder": "ex.: Pizza grande + refri 2L por R$ 59,90 só hoje!",
+      "required": true
+    },
+    {
+      "key": "whatsapp",
+      "label": "WhatsApp do negócio",
+      "type": "phone",
+      "placeholder": "31 99999-9999"
+    }
+  ],
+  "flow": {
+    "start": "promo",
+    "nodes": {
+      "promo": {
+        "type": "message",
+        "data": {
+          "text": "🔥 {{first_name|tudo bem}}, olha a promoção de hoje da [[negocio]]:\n\n[[promocao]]",
+          "buttons": [
+            {
+              "label": "Quero essa!",
+              "url": "https://wa.me/[[whatsapp]]?text=Olá! Quero a promoção que vi no Instagram 🔥"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te mandei a promo no Direct! 🔥"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,136 @@
+{
+  "name": "Imposto de Renda",
+  "description": "Coleta os dados para a declaração do IR e envia a lista de documentos.",
+  "category": "contador",
+  "icon": "🧾",
+  "tags": [
+    "imposto de renda"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "documentos",
+      "label": "Documentos para o IR",
+      "type": "textarea",
+      "placeholder": "ex.: Informe de rendimentos\nRecibos médicos\nDeclaração do ano anterior",
+      "required": true
+    }
+  ],
+  "flow": {
+    "start": "nome",
+    "nodes": {
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Olá, {{first_name|tudo bem}}! Vamos cuidar do seu Imposto de Renda 🧾 Qual é o seu nome?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "WhatsApp com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "antes"
+        },
+        "next": "antes"
+      },
+      "antes": {
+        "type": "message",
+        "data": {
+          "text": "Você já declarou IR nos anos anteriores?",
+          "quick_replies": [
+            {
+              "label": "Sim",
+              "next": "s"
+            },
+            {
+              "label": "Não, é a 1ª vez",
+              "next": "n"
+            }
+          ]
+        }
+      },
+      "s": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "ja_declarou",
+              "value": "Sim"
+            }
+          ]
+        },
+        "next": "registra"
+      },
+      "n": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "ja_declarou",
+              "value": "Primeira vez"
+            }
+          ]
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "imposto-de-renda"
+            },
+            {
+              "type": "create_order",
+              "summary": "Declaração de IR",
+              "fields": [
+                "nome",
+                "telefone",
+                "ja_declarou"
+              ]
+            }
+          ]
+        },
+        "next": "docs"
+      },
+      "docs": {
+        "type": "message",
+        "data": {
+          "text": "Anotado ✅ Vá separando estes documentos:\n\n[[documentos]]\n\nO escritório [[negocio]] te chama para combinar o envio."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "imposto de renda",
+          "irpf",
+          "declaração",
+          "declaracao",
+          "ir"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

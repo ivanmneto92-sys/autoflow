@@ -1,0 +1,185 @@
+{
+  "name": "Abrir MEI ou empresa",
+  "description": "Entende o tipo de empresa, a atividade e a cidade, e passa o contato para o escritório preparar a proposta.",
+  "category": "contador",
+  "icon": "🏢",
+  "tags": [
+    "abertura"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    }
+  ],
+  "flow": {
+    "start": "tipo",
+    "nodes": {
+      "tipo": {
+        "type": "message",
+        "data": {
+          "text": "Olá, {{first_name|tudo bem}}! Aqui é o escritório [[negocio]]. O que você quer abrir?",
+          "quick_replies": [
+            {
+              "label": "MEI",
+              "next": "t1"
+            },
+            {
+              "label": "ME/EPP",
+              "next": "t2"
+            },
+            {
+              "label": "Ainda não sei",
+              "next": "t3"
+            }
+          ]
+        }
+      },
+      "t1": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "tipo_empresa",
+              "value": "MEI"
+            }
+          ]
+        },
+        "next": "atividade"
+      },
+      "t2": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "tipo_empresa",
+              "value": "ME/EPP"
+            }
+          ]
+        },
+        "next": "atividade"
+      },
+      "t3": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "tipo_empresa",
+              "value": "A definir"
+            }
+          ]
+        },
+        "next": "atividade"
+      },
+      "atividade": {
+        "type": "ask",
+        "data": {
+          "text": "Qual será a atividade da empresa?",
+          "save_to": "atividade",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "cidade"
+      },
+      "cidade": {
+        "type": "ask",
+        "data": {
+          "text": "Em qual cidade?",
+          "save_to": "cidade",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "nome"
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Seu nome:",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "WhatsApp com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "abertura"
+            },
+            {
+              "type": "create_order",
+              "summary": "Abertura de empresa — {{field.tipo_empresa}}",
+              "fields": [
+                "nome",
+                "telefone",
+                "tipo_empresa",
+                "atividade",
+                "cidade"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Obrigado, {{field.nome}}! ✅ Um contador do escritório vai te chamar com os próximos passos e a proposta."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "mei",
+          "abrir empresa",
+          "abrir cnpj",
+          "cnpj"
+        ],
+        "match": "contains"
+      }
+    },
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "mei",
+          "cnpj"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

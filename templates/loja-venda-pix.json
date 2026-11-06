@@ -1,0 +1,166 @@
+{
+  "name": "Venda com Pix no Direct",
+  "description": "Fecha a venda de um produto no Direct: pega nome e endereço, registra o pedido, cobra por Pix e confirma sozinho quando o pagamento cai.",
+  "category": "loja",
+  "icon": "💸",
+  "tags": [
+    "venda",
+    "pix"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "EU QUERO",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "produto",
+      "label": "Produto",
+      "type": "text",
+      "placeholder": "ex.: Kit skincare",
+      "required": true
+    },
+    {
+      "key": "preco",
+      "label": "Valor (R$)",
+      "type": "money",
+      "placeholder": "49,90"
+    }
+  ],
+  "flow": {
+    "start": "abre",
+    "nodes": {
+      "abre": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 😍 O [[produto]] sai por [[preco]]. Quer garantir o seu?",
+          "buttons": [
+            {
+              "label": "Quero comprar",
+              "next": "nome"
+            }
+          ]
+        }
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Perfeito! Qual é o seu nome completo?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "endereco"
+      },
+      "endereco": {
+        "type": "ask",
+        "data": {
+          "text": "Qual o endereço de entrega? (rua, número, bairro, cidade e CEP)",
+          "save_to": "endereco",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "compra-iniciada"
+            },
+            {
+              "type": "create_order",
+              "summary": "[[produto]]",
+              "fields": [
+                "nome",
+                "endereco"
+              ],
+              "total": "[[preco]]"
+            }
+          ]
+        },
+        "next": "pix"
+      },
+      "pix": {
+        "type": "charge",
+        "data": {
+          "amount": "[[preco]]",
+          "description": "[[produto]]",
+          "expires_minutes": 30,
+          "on_expired": "venceu",
+          "text": "Pedido #{{var.order_number}} anotado! Para pagar, copie o código Pix abaixo e cole no app do seu banco 👇"
+        },
+        "next": "pago"
+      },
+      "pago": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "cliente"
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Pagamento confirmado! ✅ Obrigado, {{field.nome}}. Seu pedido #{{var.order_number}} já está sendo separado e você recebe as atualizações por aqui."
+        }
+      },
+      "venceu": {
+        "type": "message",
+        "data": {
+          "text": "O Pix venceu, mas sem problemas 😉 Quer que eu gere outro?",
+          "buttons": [
+            {
+              "label": "Gerar novo Pix",
+              "next": "pix"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    },
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "comprar",
+          "quero comprar"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

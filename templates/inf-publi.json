@@ -1,0 +1,138 @@
+{
+  "name": "Pedidos de publi e parceria",
+  "description": "Marcas que querem fechar publi deixam briefing completo (marca, produto, objetivo, prazo, e-mail) e recebem o mídia kit.",
+  "category": "influenciador",
+  "icon": "🤝",
+  "tags": [
+    "parcerias"
+  ],
+  "inputs": [
+    {
+      "key": "nome_criador",
+      "label": "Seu nome ou nome do perfil",
+      "type": "text",
+      "placeholder": "ex.: Ana Fit",
+      "required": true
+    },
+    {
+      "key": "midia_kit",
+      "label": "Link do mídia kit",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    }
+  ],
+  "flow": {
+    "start": "marca",
+    "nodes": {
+      "marca": {
+        "type": "ask",
+        "data": {
+          "text": "Olá! 🤝 Que bom que vocês querem fazer uma parceria com [[nome_criador]]. Qual é a marca/empresa?",
+          "save_to": "marca",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "produto"
+      },
+      "produto": {
+        "type": "ask",
+        "data": {
+          "text": "Qual produto ou campanha?",
+          "save_to": "produto",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "objetivo"
+      },
+      "objetivo": {
+        "type": "ask",
+        "data": {
+          "text": "Qual o objetivo e formato desejado? (ex.: 1 reels + 3 stories)",
+          "save_to": "objetivo",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "prazo"
+      },
+      "prazo": {
+        "type": "ask",
+        "data": {
+          "text": "Qual o prazo/período da campanha?",
+          "save_to": "prazo",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "email"
+      },
+      "email": {
+        "type": "ask",
+        "data": {
+          "text": "E um e-mail para contato:",
+          "save_to": "email",
+          "validate": "email",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "parceria"
+            },
+            {
+              "type": "create_order",
+              "summary": "Proposta de publi: {{field.marca}}",
+              "fields": [
+                "marca",
+                "produto",
+                "objetivo",
+                "prazo",
+                "email"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Recebido! ✅ Aqui está o mídia kit com números e formatos. Respondemos o orçamento por e-mail em breve.",
+          "buttons": [
+            {
+              "label": "Ver mídia kit",
+              "url": "[[midia_kit]]"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "publi",
+          "parceria",
+          "orçamento",
+          "orcamento",
+          "collab",
+          "mídia kit",
+          "midia kit"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

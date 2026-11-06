@@ -1,0 +1,149 @@
+{
+  "name": "Aula ou avaliação experimental",
+  "description": "Para academias, estúdios, personal e escolas: agenda a experimental com objetivo, melhor horário e contato.",
+  "category": "servicos",
+  "icon": "🏋",
+  "tags": [
+    "agendamento"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "EXPERIMENTAL",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "o_que",
+      "label": "Nome da experiência",
+      "type": "text",
+      "placeholder": "ex.: aula experimental gratuita",
+      "required": true
+    }
+  ],
+  "flow": {
+    "start": "abre",
+    "nodes": {
+      "abre": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 💪 Bora marcar sua [[o_que]] na [[negocio]]?",
+          "buttons": [
+            {
+              "label": "Bora!",
+              "next": "objetivo"
+            }
+          ]
+        }
+      },
+      "objetivo": {
+        "type": "ask",
+        "data": {
+          "text": "Qual o seu principal objetivo?",
+          "save_to": "objetivo",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "hora"
+      },
+      "hora": {
+        "type": "ask",
+        "data": {
+          "text": "Qual o melhor dia e horário pra você?",
+          "save_to": "preferencia",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "nome"
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Seu nome:",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "E seu WhatsApp com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 60,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "experimental"
+            },
+            {
+              "type": "create_order",
+              "summary": "[[o_que]] — {{field.preferencia}}",
+              "fields": [
+                "nome",
+                "telefone",
+                "objetivo",
+                "preferencia"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Fechado, {{field.nome}}! ✅ A equipe confirma sua [[o_que]] por aqui."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    },
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "experimental",
+          "aula grátis",
+          "aula gratis"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "name": "Resposta fora do horário",
+  "description": "Quando ninguém entendeu a mensagem e o negócio está fechado, avisa o horário e oferece o WhatsApp. Configure o horário em Configurações.",
+  "category": "geral",
+  "icon": "🌙",
+  "tags": [
+    "horário",
+    "resposta padrão"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "horario",
+      "label": "Horário de atendimento",
+      "type": "text",
+      "placeholder": "ex.: segunda a sábado, das 9h às 18h",
+      "required": true
+    },
+    {
+      "key": "whatsapp",
+      "label": "WhatsApp do negócio",
+      "type": "phone",
+      "placeholder": "31 99999-9999"
+    }
+  ],
+  "flow": {
+    "start": "aberto",
+    "nodes": {
+      "aberto": {
+        "type": "condition",
+        "data": {
+          "rules": [
+            {
+              "when": {
+                "type": "business_hours"
+              },
+              "next": "ja_volto"
+            }
+          ],
+          "else": "fechado"
+        }
+      },
+      "ja_volto": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! Recebemos sua mensagem e já já alguém da [[negocio]] te responde 😉"
+        }
+      },
+      "fechado": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! No momento estamos fora do horário 🌙\n\nNosso atendimento é [[horario]]. Assim que abrirmos, te respondemos por aqui!",
+          "buttons": [
+            {
+              "label": "Recado no WhatsApp",
+              "url": "https://wa.me/[[whatsapp]]?text=Olá! Vim pelo Instagram 😊"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "default_reply",
+      "priority": 0,
+      "config": {
+        "cooldown_minutes": 180
+      }
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+{
+  "name": "Encontrar o imóvel ideal",
+  "description": "Qualifica quem procura imóvel: comprar ou alugar, bairro, faixa de preço e quartos; o lead vai para Pedidos.",
+  "category": "imobiliaria",
+  "icon": "🔎",
+  "tags": [
+    "qualificação"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    }
+  ],
+  "flow": {
+    "start": "objetivo",
+    "nodes": {
+      "objetivo": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🔎 Vou te ajudar a achar o imóvel ideal. Você quer:",
+          "quick_replies": [
+            {
+              "label": "Comprar",
+              "next": "o1"
+            },
+            {
+              "label": "Alugar",
+              "next": "o2"
+            }
+          ]
+        }
+      },
+      "o1": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "objetivo",
+              "value": "Comprar"
+            }
+          ]
+        },
+        "next": "bairro"
+      },
+      "o2": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "objetivo",
+              "value": "Alugar"
+            }
+          ]
+        },
+        "next": "bairro"
+      },
+      "bairro": {
+        "type": "ask",
+        "data": {
+          "text": "Em quais bairros/regiões?",
+          "save_to": "bairro",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "faixa"
+      },
+      "faixa": {
+        "type": "ask",
+        "data": {
+          "text": "Até quanto pretende investir (ou pagar de aluguel)?",
+          "save_to": "faixa_preco",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "quartos"
+      },
+      "quartos": {
+        "type": "ask",
+        "data": {
+          "text": "Quantos quartos?",
+          "save_to": "quartos",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "nome"
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Seu nome:",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "WhatsApp com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "lead-imovel"
+            },
+            {
+              "type": "create_order",
+              "summary": "{{field.objetivo}} — {{field.bairro}} — {{field.quartos}} quartos — até {{field.faixa_preco}}",
+              "fields": [
+                "nome",
+                "telefone",
+                "objetivo",
+                "bairro",
+                "faixa_preco",
+                "quartos"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Perfeito, {{field.nome}}! ✅ Um corretor da [[negocio]] vai separar opções e te chamar por aqui."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "imóvel",
+          "imovel",
+          "apartamento",
+          "casa",
+          "comprar",
+          "alugar",
+          "aluguel"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

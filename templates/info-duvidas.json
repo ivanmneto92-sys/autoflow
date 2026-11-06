@@ -1,0 +1,156 @@
+{
+  "name": "Dúvidas antes de comprar",
+  "description": "Responde as objeções mais comuns (como funciona, preço, garantia) e oferece o suporte.",
+  "category": "infoprodutor",
+  "icon": "💬",
+  "tags": [
+    "objeções",
+    "vendas"
+  ],
+  "inputs": [
+    {
+      "key": "produto",
+      "label": "Nome do produto",
+      "type": "text",
+      "placeholder": "ex.: Curso Confeitaria Lucrativa",
+      "required": true
+    },
+    {
+      "key": "como_funciona",
+      "label": "Como funciona",
+      "type": "textarea",
+      "placeholder": "ex.: 40 aulas gravadas, acesso por 1 ano, certificado.",
+      "required": true
+    },
+    {
+      "key": "preco_texto",
+      "label": "Preço e parcelamento",
+      "type": "text",
+      "placeholder": "ex.: 12x de R$ 29,70 ou R$ 297 à vista",
+      "required": true
+    },
+    {
+      "key": "garantia",
+      "label": "Garantia",
+      "type": "text",
+      "placeholder": "ex.: 7 dias de garantia incondicional",
+      "required": true
+    },
+    {
+      "key": "link_checkout",
+      "label": "Link do checkout",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    }
+  ],
+  "flow": {
+    "start": "menu",
+    "nodes": {
+      "menu": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 💬 O que você quer saber sobre o [[produto]]?",
+          "quick_replies": [
+            {
+              "label": "Como funciona",
+              "next": "como"
+            },
+            {
+              "label": "Preço",
+              "next": "preco"
+            },
+            {
+              "label": "Garantia",
+              "next": "garantia"
+            },
+            {
+              "label": "Falar com suporte",
+              "next": "suporte"
+            }
+          ]
+        }
+      },
+      "como": {
+        "type": "message",
+        "data": {
+          "text": "[[como_funciona]]",
+          "buttons": [
+            {
+              "label": "Outra dúvida",
+              "next": "menu"
+            },
+            {
+              "label": "Quero comprar",
+              "url": "[[link_checkout]]"
+            }
+          ]
+        }
+      },
+      "preco": {
+        "type": "message",
+        "data": {
+          "text": "💰 [[preco_texto]]",
+          "buttons": [
+            {
+              "label": "Outra dúvida",
+              "next": "menu"
+            },
+            {
+              "label": "Quero comprar",
+              "url": "[[link_checkout]]"
+            }
+          ]
+        }
+      },
+      "garantia": {
+        "type": "message",
+        "data": {
+          "text": "🛡 [[garantia]]",
+          "buttons": [
+            {
+              "label": "Outra dúvida",
+              "next": "menu"
+            },
+            {
+              "label": "Quero comprar",
+              "url": "[[link_checkout]]"
+            }
+          ]
+        }
+      },
+      "suporte": {
+        "type": "message",
+        "data": {
+          "text": "Certo! Alguém do suporte vai te responder por aqui 😉"
+        },
+        "next": "pausa"
+      },
+      "pausa": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "human_handoff"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "dúvida",
+          "duvida",
+          "como funciona",
+          "garantia",
+          "parcela"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

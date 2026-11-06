@@ -1,0 +1,91 @@
+{
+  "name": "Material grátis em troca do e-mail",
+  "description": "Quem comenta recebe o material gratuito depois de deixar o e-mail; o contato fica salvo com a tag “lead”.",
+  "category": "influenciador",
+  "icon": "🎁",
+  "tags": [
+    "lead",
+    "material"
+  ],
+  "inputs": [
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "QUERO",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "material",
+      "label": "Nome do material",
+      "type": "text",
+      "placeholder": "ex.: e-book 10 receitas fit",
+      "required": true
+    },
+    {
+      "key": "link_material",
+      "label": "Link do material",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    }
+  ],
+  "flow": {
+    "start": "pede",
+    "nodes": {
+      "pede": {
+        "type": "ask",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🎁 Pra eu te mandar [[material]], me passa seu melhor e-mail:",
+          "save_to": "email",
+          "validate": "email",
+          "max_retries": 2,
+          "timeout_minutes": 60,
+          "on_invalid": "envia",
+          "retry_text": "Hmm, esse e-mail parece incompleto. Pode mandar de novo?"
+        },
+        "next": "salva"
+      },
+      "salva": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "lead"
+            }
+          ]
+        },
+        "next": "envia"
+      },
+      "envia": {
+        "type": "message",
+        "data": {
+          "text": "Prontinho! 🎉 Aqui está [[material]]:",
+          "buttons": [
+            {
+              "label": "Baixar",
+              "url": "[[link_material]]"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te mandei no Direct! 🎁"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

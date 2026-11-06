@@ -1,0 +1,124 @@
+{
+  "name": "Oferta com lembrete",
+  "description": "Quem comenta recebe a oferta com o link de compra e, 30 minutos depois, uma mensagem para tirar dúvidas.",
+  "category": "infoprodutor",
+  "icon": "🛒",
+  "tags": [
+    "vendas"
+  ],
+  "inputs": [
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "EU QUERO",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "oferta",
+      "label": "Oferta",
+      "type": "textarea",
+      "placeholder": "ex.: Curso X com 40% off até domingo",
+      "required": true
+    },
+    {
+      "key": "link_checkout",
+      "label": "Link do checkout",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    }
+  ],
+  "flow": {
+    "start": "oferta",
+    "nodes": {
+      "oferta": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🛒 [[oferta]]",
+          "buttons": [
+            {
+              "label": "Garantir minha vaga",
+              "url": "[[link_checkout]]"
+            }
+          ]
+        },
+        "next": "espera"
+      },
+      "espera": {
+        "type": "delay",
+        "data": {
+          "minutes": 30
+        },
+        "next": "lembra"
+      },
+      "lembra": {
+        "type": "message",
+        "data": {
+          "text": "Ficou alguma dúvida sobre a oferta? 😊",
+          "quick_replies": [
+            {
+              "label": "Já comprei!",
+              "next": "comprou"
+            },
+            {
+              "label": "Tenho dúvida",
+              "next": "duvida"
+            }
+          ]
+        }
+      },
+      "comprou": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "cliente"
+            }
+          ]
+        },
+        "next": "valeu"
+      },
+      "valeu": {
+        "type": "message",
+        "data": {
+          "text": "Seja muito bem-vindo(a)! 🎉 Qualquer coisa é só chamar."
+        }
+      },
+      "duvida": {
+        "type": "message",
+        "data": {
+          "text": "Manda sua dúvida aqui que alguém da equipe te responde 😉"
+        },
+        "next": "pausa"
+      },
+      "pausa": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "human_handoff"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te mandei no Direct! 🛒"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

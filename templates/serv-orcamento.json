@@ -1,0 +1,136 @@
+{
+  "name": "Pedido de orçamento",
+  "description": "Para prestadores de serviço: entende o que a pessoa precisa, onde e quando, e manda tudo para a página Pedidos.",
+  "category": "servicos",
+  "icon": "📝",
+  "tags": [
+    "orçamento"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    }
+  ],
+  "flow": {
+    "start": "o_que",
+    "nodes": {
+      "o_que": {
+        "type": "ask",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 📝 Me conta o que você precisa que a [[negocio]] faça:",
+          "save_to": "servico",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "onde"
+      },
+      "onde": {
+        "type": "ask",
+        "data": {
+          "text": "Em qual bairro/cidade?",
+          "save_to": "local",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "prazo"
+      },
+      "prazo": {
+        "type": "ask",
+        "data": {
+          "text": "Pra quando você precisa?",
+          "save_to": "prazo",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "nome"
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Seu nome:",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "E seu WhatsApp com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 60,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "orcamento"
+            },
+            {
+              "type": "create_order",
+              "summary": "Orçamento: {{field.servico}}",
+              "fields": [
+                "nome",
+                "telefone",
+                "local",
+                "prazo"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Recebido, {{field.nome}}! ✅ Vamos preparar seu orçamento e te enviar por aqui."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "orçamento",
+          "orcamento",
+          "cotação",
+          "cotacao"
+        ],
+        "match": "contains"
+      }
+    },
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "orçamento",
+          "orcamento"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

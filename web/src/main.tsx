@@ -11,6 +11,7 @@ import { Contacts } from './pages/Contacts';
 import { Dashboard } from './pages/Dashboard';
 import { FlowEditor } from './pages/FlowEditor';
 import { Flows } from './pages/Flows';
+import { Templates } from './pages/Templates';
 import { Inbox } from './pages/Inbox';
 import { Login } from './pages/Login';
 import { Onboarding } from './pages/Onboarding';
@@ -31,6 +32,7 @@ function Root() {
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/fluxos" element={<Flows />} />
+        <Route path="/modelos" element={<Templates />} />
         <Route path="/gatilhos" element={<Triggers />} />
         <Route path="/publicacoes" element={<Posts />} />
         <Route path="/pedidos" element={<Orders />} />

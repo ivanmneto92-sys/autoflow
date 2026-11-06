@@ -1,0 +1,112 @@
+{
+  "name": "Pós-atendimento e indicação",
+  "description": "Depois do atendimento (link ig.me com ref “pos”), pergunta como foi, pede avaliação e oferece um benefício por indicação.",
+  "category": "servicos",
+  "icon": "💜",
+  "tags": [
+    "pós-venda",
+    "indicação"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "link_avaliacao",
+      "label": "Link para avaliar",
+      "type": "url",
+      "placeholder": "https://g.page/r/..."
+    },
+    {
+      "key": "beneficio",
+      "label": "Benefício por indicação",
+      "type": "text",
+      "placeholder": "ex.: 10% no próximo atendimento",
+      "required": true
+    }
+  ],
+  "flow": {
+    "start": "como",
+    "nodes": {
+      "como": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 💜 Como foi seu atendimento na [[negocio]]?",
+          "quick_replies": [
+            {
+              "label": "Amei 😍",
+              "next": "amei"
+            },
+            {
+              "label": "Foi bom 🙂",
+              "next": "amei"
+            },
+            {
+              "label": "Não gostei 😕",
+              "next": "ruim"
+            }
+          ]
+        }
+      },
+      "amei": {
+        "type": "message",
+        "data": {
+          "text": "Que bom! 🙌 Duas coisinhas que ajudam muito:\n\n⭐ Avaliar a gente\n🤝 Indicar um amigo: vocês dois ganham [[beneficio]]",
+          "buttons": [
+            {
+              "label": "Avaliar",
+              "url": "[[link_avaliacao]]"
+            }
+          ]
+        }
+      },
+      "ruim": {
+        "type": "ask",
+        "data": {
+          "text": "Poxa 😔 O que não foi legal? Queremos corrigir:",
+          "save_to": "motivo",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "insatisfeito"
+            },
+            {
+              "type": "create_order",
+              "summary": "Pós-atendimento: {{field.motivo}}",
+              "fields": [
+                "motivo"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Obrigado por contar. A equipe vai falar com você 💜"
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "ref_link",
+      "priority": 10,
+      "config": {
+        "ref": "pos"
+      }
+    }
+  ]
+}

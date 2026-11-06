@@ -1,0 +1,116 @@
+{
+  "name": "Boas-vindas com menu",
+  "description": "Responde quem manda “oi” com um menu: conhecer o negócio, ver o site ou falar com alguém.",
+  "category": "geral",
+  "icon": "👋",
+  "tags": [
+    "menu",
+    "atendimento"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "sobre",
+      "label": "Conte em 1 ou 2 frases o que o negócio faz",
+      "type": "textarea",
+      "placeholder": "ex.: Pizzas artesanais no forno a lenha, delivery em BH.",
+      "required": true
+    },
+    {
+      "key": "site",
+      "label": "Site, cardápio ou catálogo",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    },
+    {
+      "key": "whatsapp",
+      "label": "WhatsApp do negócio",
+      "type": "phone",
+      "placeholder": "31 99999-9999"
+    }
+  ],
+  "flow": {
+    "start": "menu",
+    "nodes": {
+      "menu": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 👋 Bem-vindo(a) à [[negocio]]. Como posso te ajudar?",
+          "buttons": [
+            {
+              "label": "Conhecer",
+              "next": "sobre"
+            },
+            {
+              "label": "Ver o site",
+              "url": "[[site]]"
+            },
+            {
+              "label": "Falar com alguém",
+              "next": "humano"
+            }
+          ]
+        }
+      },
+      "sobre": {
+        "type": "message",
+        "data": {
+          "text": "[[sobre]]",
+          "buttons": [
+            {
+              "label": "Ver o site",
+              "url": "[[site]]"
+            },
+            {
+              "label": "Falar no WhatsApp",
+              "url": "https://wa.me/[[whatsapp]]?text=Olá! Vim pelo Instagram 😊"
+            }
+          ]
+        }
+      },
+      "humano": {
+        "type": "message",
+        "data": {
+          "text": "Beleza! Alguém da nossa equipe vai te responder aqui em instantes 😉"
+        },
+        "next": "pausa"
+      },
+      "pausa": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "atendimento-humano"
+            },
+            {
+              "type": "human_handoff"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 5,
+      "config": {
+        "keywords": [
+          "oi",
+          "olá",
+          "ola",
+          "menu",
+          "bom dia",
+          "boa tarde",
+          "boa noite"
+        ],
+        "match": "exact"
+      }
+    }
+  ]
+}

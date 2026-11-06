@@ -1,0 +1,139 @@
+{
+  "name": "Imóvel pelo comentário",
+  "description": "Quem comenta no post do imóvel recebe os detalhes, o link e pode pedir uma visita na hora.",
+  "category": "imobiliaria",
+  "icon": "🏠",
+  "tags": [
+    "comentário",
+    "visita"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "INFO",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "imovel",
+      "label": "Resumo do imóvel",
+      "type": "textarea",
+      "placeholder": "ex.: Apto 3 quartos, 90m², 2 vagas — Savassi — R$ 850 mil",
+      "required": true
+    },
+    {
+      "key": "link_imovel",
+      "label": "Link do anúncio",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    }
+  ],
+  "flow": {
+    "start": "info",
+    "nodes": {
+      "info": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🏠 Aqui estão os detalhes:\n\n[[imovel]]",
+          "buttons": [
+            {
+              "label": "Ver fotos e detalhes",
+              "url": "[[link_imovel]]"
+            },
+            {
+              "label": "Quero visitar",
+              "next": "nome"
+            }
+          ]
+        }
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Ótimo! Qual é o seu nome?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "WhatsApp com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "quando"
+        },
+        "next": "quando"
+      },
+      "quando": {
+        "type": "ask",
+        "data": {
+          "text": "Quais dias e horários são bons pra visita?",
+          "save_to": "preferencia",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "visita"
+            },
+            {
+              "type": "create_order",
+              "summary": "Visita: [[imovel]]",
+              "fields": [
+                "nome",
+                "telefone",
+                "preferencia"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Fechado, {{field.nome}}! ✅ A [[negocio]] confirma o horário da visita por aqui."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]",
+          "valor",
+          "preço",
+          "preco"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te mandei os detalhes no Direct! 🏠"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

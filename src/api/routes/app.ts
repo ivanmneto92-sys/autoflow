@@ -8,6 +8,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from '../../config.js';
 import { payload, validateGraph } from '../../flow/schema.js';
+import { applyTemplate, loadTemplates, TEMPLATE_CATEGORIES, TemplateInputError, templatePreview } from '../../flow/templates.js';
 import { parseTriggerConfig, TriggerConfigSchemas } from '../../flow/triggers.js';
 import { GraphIgClient } from '../../instagram/client.js';
 import { instagramConnectUrl } from '../../instagram/oauth.js';
@@ -56,21 +57,6 @@ export const supabaseVerifier: TokenVerifier = async (token) => {
 
 const uuid = z.string().uuid();
 const idParam = (req: FastifyRequest) => uuid.parse((req.params as { id: string }).id);
-
-function loadTemplates() {
-  const dir = join(process.cwd(), 'templates');
-  return readdirSync(dir)
-    .filter((f) => f.endsWith('.json'))
-    .map((f) => {
-      const t = JSON.parse(readFileSync(join(dir, f), 'utf8')) as {
-        name: string;
-        description?: string;
-        flow: unknown;
-        triggers?: { type: keyof typeof TriggerConfigSchemas; priority: number; config: unknown }[];
-      };
-      return { id: f.replace(/\.json$/, ''), ...t };
-    });
-}
 
 export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: TokenVerifier } = {}) {
   const verify = opts.verifyToken ?? supabaseVerifier;
@@ -231,9 +217,20 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
   });
 
   // ───────────── Templates e fluxos ─────────────
-  app.get('/app/templates', async () =>
-    loadTemplates().map((t) => ({ id: t.id, name: t.name, description: t.description ?? '' })),
-  );
+  app.get('/app/templates', async () => ({
+    categories: TEMPLATE_CATEGORIES,
+    templates: loadTemplates().map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      category: t.category,
+      icon: t.icon,
+      tags: t.tags,
+      inputs: t.inputs,
+      steps: templatePreview(t),
+      triggers: t.triggers.map((tr) => ({ type: tr.type, config: tr.config })),
+    })),
+  }));
 
   app.get('/app/flows', async (req) => {
     return sql`
@@ -251,18 +248,29 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
   app.post('/app/flows', async (req) => {
     const ws = wsOf(req);
     const body = z
-      .object({ name: z.string().min(1).max(100), template_id: z.string().optional(), create_triggers: z.boolean().default(false) })
+      .object({
+        name: z.string().min(1).max(100),
+        template_id: z.string().optional(),
+        create_triggers: z.boolean().default(false),
+        inputs: z.record(z.string().max(2000)).default({}), // respostas das perguntas do modelo
+      })
       .parse(req.body);
     let graph: unknown = {
       start: 'inicio',
       nodes: { inicio: { type: 'message', data: { text: 'Oi, {{first_name|tudo bem}}! 👋' }, next: null } },
     };
-    let tplTriggers: ReturnType<typeof loadTemplates>[number]['triggers'] = [];
+    let tplTriggers: ReturnType<typeof applyTemplate>['triggers'] = [];
     if (body.template_id) {
       const t = loadTemplates().find((x) => x.id === body.template_id);
-      if (!t) throw new HttpError(404, 'Template não encontrado');
-      graph = t.flow;
-      tplTriggers = t.triggers ?? [];
+      if (!t) throw new HttpError(404, 'Modelo não encontrado');
+      try {
+        const filled = applyTemplate(t, body.inputs);
+        graph = filled.flow;
+        tplTriggers = filled.triggers;
+      } catch (err) {
+        if (err instanceof TemplateInputError) throw new HttpError(400, err.message);
+        throw err;
+      }
     }
     return sql.begin(async (tx) => {
       const [f] = await tx`

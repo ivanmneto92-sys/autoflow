@@ -1,0 +1,108 @@
+{
+  "name": "Agendar consulta",
+  "description": "Coleta nome, telefone, área e melhor horário para a equipe confirmar a consulta.",
+  "category": "advogado",
+  "icon": "📅",
+  "tags": [
+    "agendamento"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    }
+  ],
+  "flow": {
+    "start": "nome",
+    "nodes": {
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Olá, {{first_name|tudo bem}}. Para solicitar uma consulta no escritório [[negocio]], qual é o seu nome?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "Telefone com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "area"
+        },
+        "next": "area"
+      },
+      "area": {
+        "type": "ask",
+        "data": {
+          "text": "Sobre qual assunto? (ex.: trabalhista, família, contrato)",
+          "save_to": "area",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "quando"
+      },
+      "quando": {
+        "type": "ask",
+        "data": {
+          "text": "Quais dias e horários são melhores para você?",
+          "save_to": "preferencia",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "consulta"
+            },
+            {
+              "type": "create_order",
+              "summary": "Consulta — {{field.area}}",
+              "fields": [
+                "nome",
+                "telefone",
+                "area",
+                "preferencia"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Solicitação registrada. A equipe confirma a data por aqui.\n\nAs informações enviadas aqui não substituem um atendimento profissional."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "agendar",
+          "marcar consulta",
+          "consulta"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

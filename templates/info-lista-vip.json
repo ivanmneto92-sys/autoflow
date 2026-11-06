@@ -1,0 +1,90 @@
+{
+  "name": "Lista VIP do lançamento",
+  "description": "Quem comenta entra na lista VIP: deixa o e-mail e recebe o link do grupo de avisos.",
+  "category": "infoprodutor",
+  "icon": "⭐",
+  "tags": [
+    "lançamento",
+    "lead"
+  ],
+  "inputs": [
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "VIP",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "produto",
+      "label": "Nome do produto/lançamento",
+      "type": "text",
+      "placeholder": "ex.: Método Organiza",
+      "required": true
+    },
+    {
+      "key": "grupo",
+      "label": "Link do grupo (WhatsApp/Telegram)",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    }
+  ],
+  "flow": {
+    "start": "email",
+    "nodes": {
+      "email": {
+        "type": "ask",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! ⭐ Pra entrar na lista VIP do [[produto]], me passa seu melhor e-mail:",
+          "save_to": "email",
+          "validate": "email",
+          "max_retries": 2,
+          "timeout_minutes": 60,
+          "on_invalid": "salva"
+        },
+        "next": "salva"
+      },
+      "salva": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "lista-vip"
+            }
+          ]
+        },
+        "next": "grupo"
+      },
+      "grupo": {
+        "type": "message",
+        "data": {
+          "text": "Você está na lista VIP! 🎉 Entra no grupo pra receber o aviso antes de todo mundo:",
+          "buttons": [
+            {
+              "label": "Entrar no grupo",
+              "url": "[[grupo]]"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! ⭐"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "name": "Participar do sorteio",
+  "description": "Quem comenta a palavra confere se segue o perfil e entra na lista do sorteio (tag “sorteio”).",
+  "category": "influenciador",
+  "icon": "🎉",
+  "tags": [
+    "sorteio",
+    "seguidores"
+  ],
+  "inputs": [
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "EU QUERO",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "premio",
+      "label": "Prêmio",
+      "type": "text",
+      "placeholder": "ex.: um kit de skincare",
+      "required": true
+    },
+    {
+      "key": "data",
+      "label": "Data do resultado",
+      "type": "text",
+      "placeholder": "ex.: 20/11 às 20h",
+      "required": true
+    }
+  ],
+  "flow": {
+    "start": "pede",
+    "nodes": {
+      "pede": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🎉 Pra participar do sorteio de [[premio]], toca no botão que eu confiro se você segue o perfil 👇",
+          "buttons": [
+            {
+              "label": "Participar",
+              "next": "confere"
+            }
+          ]
+        }
+      },
+      "confere": {
+        "type": "condition",
+        "data": {
+          "rules": [
+            {
+              "when": {
+                "type": "is_follower"
+              },
+              "next": "dentro"
+            }
+          ],
+          "else": "segue"
+        }
+      },
+      "dentro": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "sorteio"
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Você está participando! 🍀 O resultado sai [[data]]. Boa sorte!"
+        }
+      },
+      "segue": {
+        "type": "message",
+        "data": {
+          "text": "Pra participar precisa seguir o perfil 😉\n\n1️⃣ Toque em Seguir no perfil\n2️⃣ Volte e toque no botão",
+          "buttons": [
+            {
+              "label": "Pronto, já sigo",
+              "next": "confere"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Confere seu Direct! 🎉"
+        ],
+        "once_per_contact": true
+      }
+    }
+  ]
+}

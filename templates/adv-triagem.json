@@ -1,0 +1,194 @@
+{
+  "name": "Triagem por área do direito",
+  "description": "Organiza o primeiro contato: área, nome, telefone e um breve relato. Informativo, sem promessa de resultado (regras da OAB).",
+  "category": "advogado",
+  "icon": "⚖",
+  "tags": [
+    "triagem",
+    "agendamento"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    }
+  ],
+  "flow": {
+    "start": "area",
+    "nodes": {
+      "area": {
+        "type": "message",
+        "data": {
+          "text": "Olá, {{first_name|tudo bem}}. Aqui é o atendimento do escritório [[negocio]]. Em qual área você precisa de orientação?",
+          "quick_replies": [
+            {
+              "label": "Trabalhista",
+              "next": "a1"
+            },
+            {
+              "label": "Família",
+              "next": "a2"
+            },
+            {
+              "label": "Previdenciário",
+              "next": "a3"
+            },
+            {
+              "label": "Consumidor",
+              "next": "a4"
+            },
+            {
+              "label": "Outra",
+              "next": "a5"
+            }
+          ]
+        }
+      },
+      "a1": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "area",
+              "value": "Trabalhista"
+            }
+          ]
+        },
+        "next": "nome"
+      },
+      "a2": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "area",
+              "value": "Família"
+            }
+          ]
+        },
+        "next": "nome"
+      },
+      "a3": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "area",
+              "value": "Previdenciário"
+            }
+          ]
+        },
+        "next": "nome"
+      },
+      "a4": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "area",
+              "value": "Consumidor"
+            }
+          ]
+        },
+        "next": "nome"
+      },
+      "a5": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "area",
+              "value": "Outra"
+            }
+          ]
+        },
+        "next": "nome"
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Qual é o seu nome completo?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "Um telefone com DDD para contato:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "relato"
+        },
+        "next": "relato"
+      },
+      "relato": {
+        "type": "ask",
+        "data": {
+          "text": "Em poucas linhas, descreva a sua situação (não envie documentos por aqui):",
+          "save_to": "relato",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "triagem"
+            },
+            {
+              "type": "create_order",
+              "summary": "Primeiro contato — {{field.area}}",
+              "fields": [
+                "nome",
+                "telefone",
+                "area",
+                "relato"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Obrigado, {{field.nome}}. Suas informações foram registradas e um(a) advogado(a) do escritório entrará em contato para agendar o atendimento.\n\nAs informações enviadas aqui não substituem um atendimento profissional."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "advogado",
+          "consulta",
+          "processo",
+          "direito",
+          "ajuda jurídica",
+          "ajuda juridica"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

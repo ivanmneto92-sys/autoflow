@@ -1,0 +1,113 @@
+{
+  "name": "Aula grátis com acompanhamento",
+  "description": "Entrega a aula e, uma hora depois, pergunta se a pessoa assistiu: quem assistiu recebe a oferta, quem não assistiu recebe o link de novo.",
+  "category": "infoprodutor",
+  "icon": "🎥",
+  "tags": [
+    "aula",
+    "lançamento"
+  ],
+  "inputs": [
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "AULA",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "link_aula",
+      "label": "Link da aula",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    },
+    {
+      "key": "link_checkout",
+      "label": "Link da oferta/checkout",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    }
+  ],
+  "flow": {
+    "start": "envia",
+    "nodes": {
+      "envia": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🎥 Aqui está sua aula gratuita:",
+          "buttons": [
+            {
+              "label": "Assistir agora",
+              "url": "[[link_aula]]"
+            }
+          ]
+        },
+        "next": "espera"
+      },
+      "espera": {
+        "type": "delay",
+        "data": {
+          "minutes": 60
+        },
+        "next": "pergunta"
+      },
+      "pergunta": {
+        "type": "message",
+        "data": {
+          "text": "E aí, conseguiu assistir a aula? 👀",
+          "quick_replies": [
+            {
+              "label": "Assisti!",
+              "next": "oferta"
+            },
+            {
+              "label": "Ainda não",
+              "next": "reenvia"
+            }
+          ]
+        }
+      },
+      "oferta": {
+        "type": "message",
+        "data": {
+          "text": "Que demais! 🙌 Se quiser ir além, as vagas com condição especial estão abertas:",
+          "buttons": [
+            {
+              "label": "Quero garantir",
+              "url": "[[link_checkout]]"
+            }
+          ]
+        }
+      },
+      "reenvia": {
+        "type": "message",
+        "data": {
+          "text": "Sem problemas! Deixo o link aqui pra quando puder 😉",
+          "buttons": [
+            {
+              "label": "Assistir",
+              "url": "[[link_aula]]"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Mandei a aula no seu Direct! 🎥"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

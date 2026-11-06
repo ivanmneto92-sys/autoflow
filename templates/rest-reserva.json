@@ -1,0 +1,145 @@
+{
+  "name": "Reserva de mesa",
+  "description": "Coleta nome, dia, horário, quantidade de pessoas e telefone; a reserva vai para Pedidos para a equipe confirmar.",
+  "category": "restaurante",
+  "icon": "🍽",
+  "tags": [
+    "reserva"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "politica",
+      "label": "Aviso sobre reservas (opcional)",
+      "type": "text",
+      "placeholder": "ex.: Seguramos a mesa por 15 minutos.",
+      "required": false
+    }
+  ],
+  "flow": {
+    "start": "dia",
+    "nodes": {
+      "dia": {
+        "type": "ask",
+        "data": {
+          "text": "Oba, {{first_name|tudo bem}}! Vamos reservar 🍽 Pra qual dia? (ex.: sábado, 12/11)",
+          "save_to": "dia",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "hora"
+      },
+      "hora": {
+        "type": "ask",
+        "data": {
+          "text": "Que horário?",
+          "save_to": "horario",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "pessoas"
+      },
+      "pessoas": {
+        "type": "ask",
+        "data": {
+          "text": "Pra quantas pessoas?",
+          "save_to": "pessoas",
+          "validate": "number",
+          "max_retries": 2,
+          "timeout_minutes": 60,
+          "on_invalid": "nome",
+          "retry_text": "Me manda só o número, ex.: 4"
+        },
+        "next": "nome"
+      },
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Em nome de quem?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 60
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "E um telefone com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 60,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "reserva"
+            },
+            {
+              "type": "create_order",
+              "summary": "Reserva: {{field.pessoas}} pessoas — {{field.dia}} às {{field.horario}}",
+              "fields": [
+                "nome",
+                "telefone",
+                "dia",
+                "horario",
+                "pessoas"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Pedido de reserva #{{var.order_number}} recebido, {{field.nome}}! ✅\n\n📅 {{field.dia}} às {{field.horario}}\n👥 {{field.pessoas}} pessoas\n\nA [[negocio]] confirma por aqui em breve. [[politica]]"
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "reserva",
+          "reservar",
+          "mesa"
+        ],
+        "match": "contains"
+      }
+    },
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "reserva",
+          "reservar"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

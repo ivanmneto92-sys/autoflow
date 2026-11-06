@@ -1,0 +1,188 @@
+{
+  "name": "Orçamento de contabilidade",
+  "description": "Entende o porte da empresa (tipo, faturamento, funcionários) para o escritório montar a proposta de honorários.",
+  "category": "contador",
+  "icon": "📊",
+  "tags": [
+    "orçamento"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    }
+  ],
+  "flow": {
+    "start": "empresa",
+    "nodes": {
+      "empresa": {
+        "type": "ask",
+        "data": {
+          "text": "Olá, {{first_name|tudo bem}}! Pra preparar sua proposta, qual é o nome e o ramo da sua empresa?",
+          "save_to": "empresa",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "regime"
+      },
+      "regime": {
+        "type": "message",
+        "data": {
+          "text": "Qual o enquadramento atual?",
+          "quick_replies": [
+            {
+              "label": "MEI",
+              "next": "r1"
+            },
+            {
+              "label": "Simples Nacional",
+              "next": "r2"
+            },
+            {
+              "label": "Lucro Presumido/Real",
+              "next": "r3"
+            },
+            {
+              "label": "Não sei",
+              "next": "r4"
+            }
+          ]
+        }
+      },
+      "r1": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "regime",
+              "value": "MEI"
+            }
+          ]
+        },
+        "next": "faturamento"
+      },
+      "r2": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "regime",
+              "value": "Simples Nacional"
+            }
+          ]
+        },
+        "next": "faturamento"
+      },
+      "r3": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "regime",
+              "value": "Lucro Presumido/Real"
+            }
+          ]
+        },
+        "next": "faturamento"
+      },
+      "r4": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "set_field",
+              "field": "regime",
+              "value": "Não sabe"
+            }
+          ]
+        },
+        "next": "faturamento"
+      },
+      "faturamento": {
+        "type": "ask",
+        "data": {
+          "text": "Faturamento médio por mês (aproximado):",
+          "save_to": "faturamento",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "funcionarios"
+      },
+      "funcionarios": {
+        "type": "ask",
+        "data": {
+          "text": "Quantos funcionários?",
+          "save_to": "funcionarios",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 120
+        },
+        "next": "fone"
+      },
+      "fone": {
+        "type": "ask",
+        "data": {
+          "text": "Seu WhatsApp com DDD:",
+          "save_to": "telefone",
+          "validate": "phone",
+          "max_retries": 2,
+          "timeout_minutes": 120,
+          "on_invalid": "registra"
+        },
+        "next": "registra"
+      },
+      "registra": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "orcamento"
+            },
+            {
+              "type": "create_order",
+              "summary": "Orçamento contábil — {{field.empresa}}",
+              "fields": [
+                "empresa",
+                "regime",
+                "faturamento",
+                "funcionarios",
+                "telefone"
+              ]
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Recebido ✅ O escritório [[negocio]] vai te enviar a proposta em breve."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "contador",
+          "contabilidade",
+          "honorários",
+          "honorarios",
+          "orçamento",
+          "orcamento"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}

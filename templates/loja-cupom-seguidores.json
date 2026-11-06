@@ -1,0 +1,116 @@
+{
+  "name": "Cupom para seguidores",
+  "description": "Quem comenta recebe o cupom só se seguir a conta; quem não segue recebe o passo a passo para seguir e tentar de novo.",
+  "category": "loja",
+  "icon": "🎟",
+  "tags": [
+    "cupom",
+    "seguidores"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    },
+    {
+      "key": "palavra",
+      "label": "Palavra que o público comenta",
+      "type": "keyword",
+      "default": "CUPOM",
+      "help": "Pode colocar mais de uma, separadas por vírgula."
+    },
+    {
+      "key": "cupom",
+      "label": "Código do cupom",
+      "type": "text",
+      "placeholder": "ex.: SEGUIDOR10",
+      "required": true
+    },
+    {
+      "key": "desconto",
+      "label": "Desconto",
+      "type": "text",
+      "placeholder": "ex.: 10% na primeira compra",
+      "required": true
+    },
+    {
+      "key": "link_compra",
+      "label": "Link da loja",
+      "type": "url",
+      "placeholder": "https://seusite.com.br"
+    }
+  ],
+  "flow": {
+    "start": "pede",
+    "nodes": {
+      "pede": {
+        "type": "message",
+        "data": {
+          "text": "Oi, {{first_name|tudo bem}}! 🎟 O cupom de [[desconto]] é exclusivo para quem segue a [[negocio]]. Toca no botão que eu confiro 👇",
+          "buttons": [
+            {
+              "label": "Quero meu cupom",
+              "next": "confere"
+            }
+          ]
+        }
+      },
+      "confere": {
+        "type": "condition",
+        "data": {
+          "rules": [
+            {
+              "when": {
+                "type": "is_follower"
+              },
+              "next": "cupom"
+            }
+          ],
+          "else": "segue"
+        }
+      },
+      "cupom": {
+        "type": "message",
+        "data": {
+          "text": "Aqui está! 🎉 Use o código *[[cupom]]* e ganhe [[desconto]].",
+          "buttons": [
+            {
+              "label": "Usar agora",
+              "url": "[[link_compra]]"
+            }
+          ]
+        }
+      },
+      "segue": {
+        "type": "message",
+        "data": {
+          "text": "Ainda não encontrei você entre os seguidores 😕\n\n1️⃣ Abra nosso perfil e toque em Seguir\n2️⃣ Volte aqui e toque no botão",
+          "buttons": [
+            {
+              "label": "Pronto, já sigo",
+              "next": "confere"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "comment",
+      "priority": 10,
+      "config": {
+        "media_id": null,
+        "keywords": [
+          "[[palavra]]"
+        ],
+        "match": "contains",
+        "public_replies": [
+          "Te chamei no Direct! 📩"
+        ],
+        "once_per_contact": false
+      }
+    }
+  ]
+}

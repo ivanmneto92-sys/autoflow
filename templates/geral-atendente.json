@@ -1,0 +1,80 @@
+{
+  "name": "Falar com atendente",
+  "description": "Quem pede para falar com uma pessoa deixa o nome e o assunto; o robô pausa e a equipe assume na Inbox.",
+  "category": "geral",
+  "icon": "👤",
+  "tags": [
+    "atendimento"
+  ],
+  "inputs": [
+    {
+      "key": "negocio",
+      "label": "Nome do negócio",
+      "placeholder": "ex.: Pizzaria do Bairro"
+    }
+  ],
+  "flow": {
+    "start": "nome",
+    "nodes": {
+      "nome": {
+        "type": "ask",
+        "data": {
+          "text": "Claro! Pra eu passar para a equipe da [[negocio]], qual é o seu nome?",
+          "save_to": "nome",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 30
+        },
+        "next": "assunto"
+      },
+      "assunto": {
+        "type": "ask",
+        "data": {
+          "text": "Obrigado, {{field.nome}}! Me conta em poucas palavras qual é o assunto:",
+          "save_to": "assunto",
+          "validate": "text",
+          "max_retries": 2,
+          "timeout_minutes": 30
+        },
+        "next": "pausa"
+      },
+      "pausa": {
+        "type": "action",
+        "data": {
+          "actions": [
+            {
+              "type": "add_tag",
+              "tag": "atendimento-humano"
+            },
+            {
+              "type": "human_handoff"
+            }
+          ]
+        },
+        "next": "ok"
+      },
+      "ok": {
+        "type": "message",
+        "data": {
+          "text": "Anotado ✅ Já avisei a equipe, alguém vai te responder aqui mesmo em breve."
+        }
+      }
+    }
+  },
+  "triggers": [
+    {
+      "type": "dm_keyword",
+      "priority": 10,
+      "config": {
+        "keywords": [
+          "atendente",
+          "humano",
+          "pessoa",
+          "falar com alguém",
+          "falar com alguem"
+        ],
+        "match": "contains"
+      }
+    }
+  ]
+}
