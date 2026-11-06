@@ -9,3 +9,8 @@ dump.rdb
 .vercel
 web/.env.local
 uploads
+
+# Deploy na VPS
+tunnel.env
+*.tgz
+*.pub

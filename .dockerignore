@@ -1,0 +1,13 @@
+node_modules
+web
+.git
+dist
+uploads
+.env
+.env.*
+.scratch
+.vercel
+*.log
+*.pub
+*.tgz
+tunnel.env
