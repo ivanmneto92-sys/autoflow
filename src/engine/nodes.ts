@@ -537,8 +537,9 @@ async function unlockButton(
   }
   if (follows === false) {
     ctx.session.vars.is_follower = 'nao';
-    const buttons: Button[] = [{ type: 'postback', title: LOCK_DEFAULTS.retry, payload: payload.lock(ctx.version.id, nodeId, i, true) }];
-    if (ctx.account.username) buttons.push({ type: 'web_url', title: 'Abrir perfil', url: `https://www.instagram.com/${ctx.account.username}/` });
+    const buttons: Button[] = [{ type: 'postback', title: node.data.retry_label || LOCK_DEFAULTS.retry, payload: payload.lock(ctx.version.id, nodeId, i, true) }];
+    if (ctx.account.username)
+      buttons.push({ type: 'web_url', title: node.data.profile_label || LOCK_DEFAULTS.profile, url: `https://www.instagram.com/${ctx.account.username}/` });
     await ctx.send({ kind: 'buttons', text: await render(ctx, node.data.locked_text || LOCK_DEFAULTS.locked_text), buttons }, nodeId);
     return { type: 'next', next: null };
   }
@@ -549,7 +550,7 @@ async function unlockButton(
       {
         kind: 'buttons',
         // Acabou de seguir ("Já sigo") → agradece; já seguia → só entrega
-        text: retry ? await render(ctx, node.data.unlocked_text || LOCK_DEFAULTS.unlocked_text) : LOCK_DEFAULTS.ready_text,
+        text: await render(ctx, retry ? node.data.unlocked_text || LOCK_DEFAULTS.unlocked_text : node.data.ready_text || LOCK_DEFAULTS.ready_text),
         buttons: [{ type: 'web_url', title: b.label, url: await trackUrl(ctx, nodeId, await renderUrl(ctx, b.url), b.actions) }],
       },
       nodeId,

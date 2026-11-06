@@ -4,6 +4,7 @@ import { Empty, ErrorBox, Icon, Loading, Modal, useLoad, useToast } from '../com
 import { api, apiUpload, formatDateTime } from '../lib/api';
 import { isEditable, MATCH_LABEL, POST_STATUS, postDate, postTitle, TYPE_LABEL, type Match, type MediaType, type Post } from '../lib/posts';
 import { QuickAutomation } from '../components/QuickAutomation';
+import { ReplyVariants } from '../components/ReplyVariants';
 import { prepareImage } from '../lib/image';
 import { useSession } from '../lib/session';
 
@@ -515,7 +516,7 @@ export function PostForm({
   const [flowId, setFlowId] = useState(post?.automation?.flow_id ?? initialFlowId ?? usable.find((f) => f.status === 'published')?.id ?? usable[0]?.id ?? '');
   const [keywords, setKeywords] = useState(post?.automation?.keywords.join(', ') ?? '');
   const [match, setMatch] = useState<Match>(post?.automation?.match ?? 'contains');
-  const [replies, setReplies] = useState(post?.automation?.public_replies.join('\n') ?? '');
+  const [replies, setReplies] = useState<string[]>(post?.automation?.public_replies ?? ['Te mandei no Direct! 📩']);
   const [once, setOnce] = useState(post?.automation?.once_per_contact ?? true);
   const [saving, setSaving] = useState(false);
 
@@ -616,7 +617,7 @@ export function PostForm({
             flow_id: flowId,
             keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
             match,
-            public_replies: replies.split('\n').map((r) => r.trim()).filter(Boolean),
+            public_replies: replies.map((r) => r.trim()).filter(Boolean),
             once_per_contact: once,
           }
         : null,
@@ -850,8 +851,7 @@ export function PostForm({
                     </div>
                     <div className="field">
                       <label className="label">Resposta pública no comentário (opcional)</label>
-                      <textarea className="input textarea" rows={2} value={replies} onChange={(e) => setReplies(e.target.value)} placeholder={'Te chamei no Direct! 📩\nAcabei de te mandar no Direct 😉'} />
-                      <span className="hint">Uma por linha — o robô sorteia uma.</span>
+                      <ReplyVariants value={replies} onChange={setReplies} />
                     </div>
                     <label className="checkbox small">
                       <input type="checkbox" checked={once} onChange={(e) => setOnce(e.target.checked)} /> Só uma vez por pessoa

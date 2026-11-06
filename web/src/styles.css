@@ -436,3 +436,4 @@ p { margin: 0; }
 .qa-banner { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; margin-bottom: 16px; text-align: left; font: inherit; color: inherit; cursor: pointer; border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); background: color-mix(in srgb, var(--primary) 7%, var(--surface)); }
 .qa-banner > div { flex: 1; }
 .qa-banner-icon { width: 38px; height: 38px; border-radius: 10px; background: var(--primary); color: #fff; display: grid; place-items: center; flex: none; }
+.qa-reply { white-space: pre-wrap; }

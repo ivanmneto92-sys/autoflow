@@ -18,6 +18,10 @@ export const QuickCommentSchema = z.object({
     .default({}),
   followers_only: z.boolean().default(false),
   locked_text: z.string().max(1000).optional(),
+  unlocked_text: z.string().max(1000).optional(),
+  ready_text: z.string().max(1000).optional(),
+  retry_label: z.string().trim().min(1).max(20).optional(),
+  profile_label: z.string().trim().min(1).max(20).optional(),
   ask_email: z
     .object({ enabled: z.boolean().default(false), text: text(1000).default('Antes, me passa seu melhor e-mail? Assim te aviso das novidades 💌') })
     .default({}),
@@ -65,7 +69,15 @@ export function buildCommentFlow(q: QuickComment): { graph: FlowGraph; notes: st
       data: {
         text: q.opening.text,
         buttons: [{ label: q.opening.button, next: afterOpening, ...(q.followers_only ? { followers_only: true } : {}) }],
-        ...(q.followers_only ? { locked_text: q.locked_text?.trim() || LOCK_DEFAULTS.locked_text } : {}),
+        ...(q.followers_only
+          ? {
+              locked_text: q.locked_text?.trim() || LOCK_DEFAULTS.locked_text,
+              ...(q.unlocked_text?.trim() ? { unlocked_text: q.unlocked_text.trim() } : {}),
+              ...(q.ready_text?.trim() ? { ready_text: q.ready_text.trim() } : {}),
+              ...(q.retry_label ? { retry_label: q.retry_label } : {}),
+              ...(q.profile_label ? { profile_label: q.profile_label } : {}),
+            }
+          : {}),
       },
     } as FlowNode);
   if (q.ask_email.enabled)

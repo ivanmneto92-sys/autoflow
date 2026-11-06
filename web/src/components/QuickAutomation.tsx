@@ -35,13 +35,15 @@ export function QuickAutomation({
   const [target, setTarget] = useState<Target>(initialPost ? { kind: 'scheduled', post: initialPost } : { kind: 'any' });
   const [picker, setPicker] = useState<'media' | 'scheduled' | null>(null);
   const [keywords, setKeywords] = useState('');
-  const [replies, setReplies] = useState('Te mandei no Direct! 📩\nCorre no Direct 😉\nAcabei de te chamar no Direct 💌');
+  const [replies, setReplies] = useState<string[]>(['Te mandei no Direct! 📩', 'Corre no Direct 😉', 'Acabei de te chamar no Direct 💌']);
   const [once, setOnce] = useState(true);
   const [opening, setOpening] = useState(true);
   const [openingText, setOpeningText] = useState('Oi, {{first_name|tudo bem}}! 👋 Que bom que você comentou. Toque no botão abaixo que eu te mando agora 👇');
   const [openingButton, setOpeningButton] = useState('Quero receber');
   const [lock, setLock] = useState(false);
   const [lockedText, setLockedText] = useState(LOCK_DEFAULTS.locked_text);
+  const [retryLabel, setRetryLabel] = useState(LOCK_DEFAULTS.retry);
+  const [profileLabel, setProfileLabel] = useState(LOCK_DEFAULTS.profile);
   const [email, setEmail] = useState(false);
   const [emailText, setEmailText] = useState('Antes, me passa seu melhor e-mail? Assim te aviso das novidades 💌');
   const [msgText, setMsgText] = useState('Aqui está o que você pediu 🎉');
@@ -69,11 +71,13 @@ export function QuickAutomation({
           name: name.trim() || undefined,
           target: mode === 'flow-only' ? { kind: 'none' } : target.kind === 'scheduled' ? { kind: 'scheduled', post_id: target.post.id } : target,
           keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
-          public_replies: replies.split('\n').map((r) => r.trim()).filter(Boolean),
+          public_replies: replies.map((r) => r.trim()).filter(Boolean),
           once_per_contact: once,
           opening: { enabled: openingOn, text: openingText, button: openingButton },
           followers_only: lock,
           locked_text: lock ? lockedText : undefined,
+          retry_label: lock && retryLabel.trim() ? retryLabel.trim() : undefined,
+          profile_label: lock && profileLabel.trim() ? profileLabel.trim() : undefined,
           ask_email: { enabled: email, text: emailText },
           message: { text: msgText, image_url: image || undefined, links: validLinks },
           follow_up: { enabled: followUp && validLinks.length > 0, minutes: followMinutes, text: followText },
@@ -149,9 +153,29 @@ export function QuickAutomation({
                 <input className="input" value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="Palavra (ex.: CANVA). Vazio = qualquer comentário" />
                 <span className="hint">Separe por vírgula. Maiúsculas e acentos não importam.</span>
                 <label className="label" style={{ marginTop: 8 }}>
-                  Resposta pública no comentário (o robô sorteia uma)
+                  Resposta pública no comentário
                 </label>
-                <textarea className="textarea" rows={3} value={replies} onChange={(e) => setReplies(e.target.value)} />
+                {replies.map((r, i) => (
+                  <div className="row" key={i}>
+                    <textarea
+                      className="textarea"
+                      rows={r.includes('\n') ? 3 : 1}
+                      style={{ minHeight: r.includes('\n') ? 76 : 42, resize: 'vertical' }}
+                      value={r}
+                      placeholder="Ex.: Te mandei no Direct! 📩"
+                      onChange={(e) => setReplies(replies.map((x, k) => (k === i ? e.target.value : x)))}
+                    />
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setReplies(replies.filter((_, k) => k !== i))} title="Remover">
+                      <Icon name="x" />
+                    </button>
+                  </div>
+                ))}
+                {replies.length < 10 && (
+                  <button type="button" className="btn btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setReplies([...replies, ''])}>
+                    <Icon name="plus" /> Outra versão
+                  </button>
+                )}
+                <span className="hint">Cada caixa é uma resposta completa (pode ter várias linhas). Com mais de uma, o robô sorteia — fica mais natural.</span>
                 <label className="checkbox small">
                   <input type="checkbox" checked={once} onChange={(e) => setOnce(e.target.checked)} /> Responder só 1 vez por pessoa
                 </label>
@@ -177,8 +201,18 @@ export function QuickAutomation({
           <Section n={mode === 'full' ? 4 : 2} title="🔒 Só para seguidores" toggle={{ on: lock, set: setLock }}>
             {lock && (
               <>
-                <span className="hint">Ao tocar no botão, o robô confere se a pessoa segue. Quem não segue recebe esta mensagem com “Já sigo” e “Abrir perfil”:</span>
+                <span className="hint">Ao tocar no botão da abertura, o robô confere se a pessoa segue. Quem segue recebe o conteúdo; quem não segue recebe:</span>
                 <textarea className="textarea" rows={3} value={lockedText} onChange={(e) => setLockedText(e.target.value)} />
+                <div className="row">
+                  <div className="field" style={{ flex: 1 }}>
+                    <label className="label">Botão para tentar de novo</label>
+                    <input className="input" maxLength={20} value={retryLabel} onChange={(e) => setRetryLabel(e.target.value)} />
+                  </div>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label className="label">Botão do perfil</label>
+                    <input className="input" maxLength={20} value={profileLabel} onChange={(e) => setProfileLabel(e.target.value)} />
+                  </div>
+                </div>
               </>
             )}
           </Section>
@@ -256,9 +290,9 @@ export function QuickAutomation({
         <Preview
           showComment={mode === 'full'}
           keyword={keywords.split(',')[0]?.trim() || 'QUERO'}
-          reply={replies.split('\n').find((r) => r.trim())}
+          reply={replies.find((r) => r.trim())}
           opening={openingOn ? { text: openingText, button: openingButton } : null}
-          lock={lock ? lockedText : null}
+          lock={lock ? { text: lockedText, retry: retryLabel || LOCK_DEFAULTS.retry, profile: profileLabel || LOCK_DEFAULTS.profile } : null}
           email={email ? emailText : null}
           msg={{ text: msgText, image, links: validLinks.length ? validLinks : links.filter((l) => l.label.trim()) }}
           followUp={followUp && validLinks.length ? { minutes: followMinutes, text: followText } : null}
@@ -313,7 +347,7 @@ function Preview(p: {
   keyword: string;
   reply?: string;
   opening: { text: string; button: string } | null;
-  lock: string | null;
+  lock: { text: string; retry: string; profile: string } | null;
   email: string | null;
   msg: { text: string; image: string; links: { label: string }[] };
   followUp: { minutes: number; text: string } | null;
@@ -341,7 +375,7 @@ function Preview(p: {
         {p.lock && (
           <>
             <div className="qa-note">Se não segue:</div>
-            <Bubble text={fill(p.lock)} buttons={['Já sigo', 'Abrir perfil']} dim />
+            <Bubble text={fill(p.lock.text)} buttons={[p.lock.retry, p.lock.profile]} dim />
           </>
         )}
         {p.email && <Bubble text={fill(p.email)} chips={['Agora não']} />}

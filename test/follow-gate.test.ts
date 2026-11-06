@@ -288,3 +288,39 @@ describe('eco da mensagem do robô com outro ID não pausa o robô (bug do teste
     expect(textOf(t.ig.sent[1]!.msg)).toContain('exclusivo');
   });
 });
+
+describe('🔒 textos e botões personalizados', () => {
+  it('usa os textos e nomes de botão definidos no bloco', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow({
+      start: 'm',
+      nodes: {
+        m: {
+          type: 'message',
+          data: {
+            text: 'Seu guia 👇',
+            buttons: [{ label: 'Quero o guia', url: 'https://site.com/guia', followers_only: true }],
+            locked_text: 'Só pra quem me segue!',
+            retry_label: 'Pronto, segui',
+            profile_label: 'Ver perfil',
+            ready_text: 'Toma aqui 🎁',
+          },
+        },
+      },
+    });
+    t.addTrigger(flowId, 'comment', { keywords: [], match: 'contains', public_replies: [], once_per_contact: false });
+    await t.engine.handleEvent(comment('quero'));
+    await t.engine.handleEvent(postback(firstPostback(t.ig.sent[0]!.msg as never), 'user-1', 'Quero o guia'));
+    const locked = t.ig.sent[1]!.msg;
+    expect(textOf(locked)).toBe('Só pra quem me segue!');
+    expect(locked.kind === 'buttons' && locked.buttons.map((b) => b.title)).toEqual(['Pronto, segui', 'Ver perfil']);
+
+    const t2 = setup();
+    const f2 = t2.addFlow((t.store as never as { versions: { graph: FlowGraph }[] }).versions[0]!.graph);
+    t2.addTrigger(f2.flowId, 'comment', { keywords: [], match: 'contains', public_replies: [], once_per_contact: false });
+    t2.ig.followers.add('user-1');
+    await t2.engine.handleEvent(comment('quero'));
+    await t2.engine.handleEvent(postback(firstPostback(t2.ig.sent[0]!.msg as never), 'user-1', 'Quero o guia'));
+    expect(textOf(t2.ig.sent[1]!.msg)).toBe('Toma aqui 🎁');
+  });
+});

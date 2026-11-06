@@ -23,6 +23,7 @@ export const LOCK_DEFAULTS = {
   consent_text: 'Quase lá! Toque em 👍 aqui embaixo para eu liberar 👇',
   consent_reply: '👍 Liberar',
   retry: 'Já sigo',
+  profile: 'Abrir perfil',
 };
 
 /** Ações que rodam no toque de um botão / resposta rápida (sem precisar de um nó de Ação). */
@@ -96,6 +97,9 @@ export const NodeSchema = z.discriminatedUnion('type', [
       // Botões 🔒: o que quem não segue recebe, e o texto que acompanha o link liberado
       locked_text: z.string().max(1000).optional(),
       unlocked_text: z.string().max(1000).optional(),
+      ready_text: z.string().max(1000).optional(), // quem já seguia, no 1º toque
+      retry_label: z.string().trim().min(1).max(20).optional(), // botão "Já sigo"
+      profile_label: z.string().trim().min(1).max(20).optional(), // botão "Abrir perfil"
       // Foto enviada antes do texto (conta como 1 mensagem a mais)
       image_url: httpUrl.optional(),
       // Salva a opção tocada (texto do botão / resposta rápida) neste campo do contato — dispensa um nó de Ação por opção

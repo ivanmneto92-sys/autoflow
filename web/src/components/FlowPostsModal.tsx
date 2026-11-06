@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, formatDateTime } from '../lib/api';
 import { describeAutomation, isEditable, MATCH_LABEL, POST_STATUS, postDate, postTitle, TYPE_LABEL, type Match, type Post } from '../lib/posts';
 import { PostForm } from '../pages/Posts';
+import { ReplyVariants } from './ReplyVariants';
 import { ErrorBox, Icon, Loading, Modal, useLoad, useToast } from './ui';
 
 /** No editor de fluxo: mostra em quais publicações o fluxo é usado e liga ele a uma publicação agendada. */
@@ -16,7 +17,7 @@ export function FlowPostsModal({ flowId, flowPublished, onClose }: { flowId: str
   const [postId, setPostId] = useState('');
   const [keywords, setKeywords] = useState('');
   const [match, setMatch] = useState<Match>('contains');
-  const [replies, setReplies] = useState('');
+  const [replies, setReplies] = useState<string[]>(['Te mandei no Direct! 📩']);
   const [once, setOnce] = useState(true);
   const [busy, setBusy] = useState(false);
   const [scheduling, setScheduling] = useState(false);
@@ -36,7 +37,7 @@ export function FlowPostsModal({ flowId, flowPublished, onClose }: { flowId: str
             flow_id: flowId,
             keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
             match,
-            public_replies: replies.split('\n').map((r) => r.trim()).filter(Boolean),
+            public_replies: replies.map((r) => r.trim()).filter(Boolean),
             once_per_contact: once,
           },
         },
@@ -44,7 +45,7 @@ export function FlowPostsModal({ flowId, flowPublished, onClose }: { flowId: str
       toast('Fluxo vinculado à publicação');
       setPostId('');
       setKeywords('');
-      setReplies('');
+      setReplies(['Te mandei no Direct! 📩']);
       posts.reload();
     } catch (e) {
       toast((e as Error).message, true);
@@ -177,13 +178,10 @@ export function FlowPostsModal({ flowId, flowPublished, onClose }: { flowId: str
                   <input className="input" value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="Palavra do comentário (ex.: QUERO)" />
                 </div>
                 <span className="hint">Separe por vírgula. Vazio = qualquer comentário no post.</span>
-                <textarea
-                  className="input textarea"
-                  rows={2}
-                  value={replies}
-                  onChange={(e) => setReplies(e.target.value)}
-                  placeholder={'Resposta pública opcional, uma por linha\nex.: Te chamei no Direct! 📩'}
-                />
+                <label className="label" style={{ marginBottom: 0 }}>
+                  Resposta pública no comentário (opcional)
+                </label>
+                <ReplyVariants value={replies} onChange={setReplies} />
                 <div className="row-between">
                   <label className="checkbox small">
                     <input type="checkbox" checked={once} onChange={(e) => setOnce(e.target.checked)} /> Só uma vez por pessoa

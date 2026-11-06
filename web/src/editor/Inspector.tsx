@@ -352,18 +352,29 @@ function MessageForm({ node, set }: { node: Extract<FlowNode, { type: 'message' 
       {mode === 'buttons' && node.data.buttons!.some((b) => b.followers_only) && (
         <div className="card stack-sm" style={{ padding: 10, background: 'var(--surface-2)' }}>
           <div className="small">
-            <b>🔒 Como funciona:</b> quem já segue e já falou com você (ou foi confirmado antes) recebe o botão normal — abre no 1º toque. Quem só
-            comentou toca uma vez para o robô conferir: se segue, recebe na hora “{LOCK_DEFAULTS.ready_text}” com o link; se não segue, recebe a mensagem abaixo
-            com <b>{LOCK_DEFAULTS.retry}</b> e <b>Abrir perfil</b>. Se a Meta pedir que a pessoa envie uma mensagem antes de conferir, o robô pede um toque em
-            “{LOCK_DEFAULTS.consent_reply}” e confere de novo — tudo automático.
+            <b>🔒 Como funciona:</b> quem só comentou toca uma vez para o robô conferir se segue. Quem já é seguidor confirmado (ou já conversou com você)
+            recebe o botão normal, que abre no 1º toque. Todos os textos e botões abaixo são seus — edite à vontade.
           </div>
-          <Field label="Mensagem para quem não segue">
+          <Field label="Quem NÃO segue recebe">
             <TextArea value={node.data.locked_text ?? LOCK_DEFAULTS.locked_text} onChange={(v) => set((d) => (d.locked_text = v))} />
           </Field>
-          {node.data.buttons!.some((b) => b.followers_only && b.url) && (
-            <Field label="Mensagem para quem acabou de seguir (vai junto com o link)">
-              <TextArea value={node.data.unlocked_text ?? LOCK_DEFAULTS.unlocked_text} onChange={(v) => set((d) => (d.unlocked_text = v))} />
+          <div className="row">
+            <Field label="Botão “tentar de novo”">
+              <input className="input" maxLength={20} value={node.data.retry_label ?? LOCK_DEFAULTS.retry} onChange={(e) => set((d) => (e.target.value ? (d.retry_label = e.target.value) : delete d.retry_label))} />
             </Field>
+            <Field label="Botão do perfil">
+              <input className="input" maxLength={20} value={node.data.profile_label ?? LOCK_DEFAULTS.profile} onChange={(e) => set((d) => (e.target.value ? (d.profile_label = e.target.value) : delete d.profile_label))} />
+            </Field>
+          </div>
+          {node.data.buttons!.some((b) => b.followers_only && b.url) && (
+            <>
+              <Field label="Quem JÁ seguia recebe (junto com o link)">
+                <TextArea value={node.data.ready_text ?? LOCK_DEFAULTS.ready_text} onChange={(v) => set((d) => (d.ready_text = v))} />
+              </Field>
+              <Field label="Quem ACABOU de seguir recebe (junto com o link)">
+                <TextArea value={node.data.unlocked_text ?? LOCK_DEFAULTS.unlocked_text} onChange={(v) => set((d) => (d.unlocked_text = v))} />
+              </Field>
+            </>
           )}
         </div>
       )}
