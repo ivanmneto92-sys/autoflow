@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { config } from '../../config.js';
 import { fbDebugToken } from '../../instagram/oauth.js';
 import { db } from '../../lib/db.js';
-import { MEDIA_TYPES_ALLOWED, mediaRoot, mediaUrl, ownMediaFile } from '../../posts/media.js';
+import { MEDIA_TYPES_ALLOWED, PDF_MAX_MB, mediaRoot, mediaUrl, ownMediaFile } from '../../posts/media.js';
 import { AutomationSchema, checkPostRules, PostInputSchema, type PostInput } from '../../posts/schema.js';
 import { PgStore } from '../../store/pg.js';
 import { HttpError } from '../http.js';
@@ -46,9 +46,10 @@ export async function postRoutes(app: FastifyInstance, wsOf: (req: FastifyReques
     const ws = wsOf(req);
     const type = String(req.headers['content-type'] ?? '').split(';')[0]!.trim().toLowerCase();
     const allowed = MEDIA_TYPES_ALLOWED[type];
-    if (!allowed) throw new HttpError(415, 'Formato não aceito. Use imagem JPG ou vídeo MP4/MOV.');
-    const max = config().MEDIA_MAX_MB * 1024 * 1024;
-    if (Number(req.headers['content-length'] ?? 0) > max) throw new HttpError(413, `Arquivo maior que ${config().MEDIA_MAX_MB} MB`);
+    if (!allowed) throw new HttpError(415, 'Formato não aceito. Use imagem JPG, vídeo MP4/MOV ou PDF.');
+    const maxMb = allowed.kind === 'file' ? Math.min(PDF_MAX_MB, config().MEDIA_MAX_MB) : config().MEDIA_MAX_MB;
+    const max = maxMb * 1024 * 1024;
+    if (Number(req.headers['content-length'] ?? 0) > max) throw new HttpError(413, `Arquivo maior que ${maxMb} MB`);
 
     const dir = join(mediaRoot(), ws);
     await mkdir(dir, { recursive: true });
@@ -58,7 +59,7 @@ export async function postRoutes(app: FastifyInstance, wsOf: (req: FastifyReques
     const limit = new Transform({
       transform(chunk: Buffer, _enc, cb) {
         size += chunk.length;
-        if (size > max) return cb(new HttpError(413, `Arquivo maior que ${config().MEDIA_MAX_MB} MB`));
+        if (size > max) return cb(new HttpError(413, `Arquivo maior que ${maxMb} MB`));
         cb(null, chunk);
       },
     });
@@ -87,7 +88,7 @@ export async function postRoutes(app: FastifyInstance, wsOf: (req: FastifyReques
     const ws = wsOf(req);
     const type = String(req.headers['content-type'] ?? '').split(';')[0]!.trim().toLowerCase();
     const allowed = MEDIA_TYPES_ALLOWED[type];
-    if (!allowed) throw new HttpError(415, 'Formato não aceito. Use imagem JPG ou vídeo MP4/MOV.');
+    if (!allowed) throw new HttpError(415, 'Formato não aceito. Use imagem JPG, vídeo MP4/MOV ou PDF.');
     const id = String(req.headers['x-upload-id'] ?? '').toLowerCase();
     const offset = Number(req.headers['x-offset']);
     const total = Number(req.headers['x-total']);

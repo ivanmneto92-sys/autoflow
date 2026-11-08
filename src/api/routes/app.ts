@@ -440,11 +440,21 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
       where t.workspace_id = ${wsOf(req)} group by t.name order by t.name`;
   });
 
+  /** Campos personalizados já usados (para o menu { } do editor) */
+  app.get('/app/fields', async (req) => {
+    const rows = await sql`
+      select distinct k from autoflow.contact_fields cf join autoflow.contacts c on c.id = cf.contact_id,
+        jsonb_object_keys(cf.values) k
+      where c.workspace_id = ${wsOf(req)} and k !~ '^(seguidor_desde)$' order by k limit 100`;
+    return rows.map((r) => r.k as string);
+  });
+
   /** Conversas: último recado de cada contato */
   app.get('/app/conversations', async (req) => {
-    const { filter } = z.object({ filter: z.enum(['all', 'human']).default('all') }).parse(req.query);
+    const { filter } = z.object({ filter: z.enum(['all', 'human', 'open']).default('all') }).parse(req.query);
+    const closed = sql`(c.closed_at is not null and (c.last_inbound_at is null or c.last_inbound_at <= c.closed_at))`;
     return sql`
-      select c.id, c.username, c.name, c.bot_paused_until, c.last_inbound_at,
+      select c.id, c.username, c.name, c.bot_paused_until, c.last_inbound_at, ${closed} as closed,
         m.text as last_text, m.direction as last_direction, m.source as last_source, m.created_at as last_at
       from autoflow.contacts c
       join lateral (
@@ -452,7 +462,7 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
         where contact_id = c.id order by created_at desc limit 1
       ) m on true
       where c.workspace_id = ${wsOf(req)} and c.igsid not like 'sim\_%'
-        ${filter === 'human' ? sql`and c.bot_paused_until > now()` : sql``}
+        ${filter === 'human' ? sql`and c.bot_paused_until > now()` : filter === 'open' ? sql`and not ${closed}` : sql``}
       order by m.created_at desc limit 200`;
   });
 
@@ -490,6 +500,20 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
       await store.updateContact(id, { botPausedUntil: new Date(Date.now() + hours * 3_600_000) });
       await store.cancelActiveSessions(id);
     }
+    return { ok: true };
+  });
+
+  /** Fecha / reabre a conversa no Inbox (a próxima mensagem do cliente reabre sozinha). */
+  app.post('/app/contacts/:id/close', async (req) => {
+    const id = idParam(req);
+    await own('contacts', id, wsOf(req));
+    await sql`update autoflow.contacts set closed_at = now(), updated_at = now() where id = ${id}`;
+    return { ok: true };
+  });
+  app.post('/app/contacts/:id/reopen', async (req) => {
+    const id = idParam(req);
+    await own('contacts', id, wsOf(req));
+    await sql`update autoflow.contacts set closed_at = null, updated_at = now() where id = ${id}`;
     return { ok: true };
   });
 

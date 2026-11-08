@@ -173,3 +173,31 @@ describe('automação rápida Comentário → Direct', () => {
     expect(notes).toHaveLength(2);
   });
 });
+
+describe('PDF e ações novas', () => {
+  it('bloco Arquivo manda o PDF como anexo "file"', async () => {
+    const { toGraphMessage } = await import('../src/instagram/client.js');
+    const t = setup();
+    const { flowId } = t.addFlow({ start: 'f', nodes: { f: { type: 'file', data: { url: 'https://site.com/guia.pdf' }, next: 'm' }, m: { type: 'message', data: { text: 'Taí o guia' } } } });
+    t.addTrigger(flowId, 'dm_keyword', { keywords: ['pdf'] });
+    await t.engine.handleEvent(dm('pdf'));
+    expect(t.ig.sent.map((s) => s.msg.kind)).toEqual(['file', 'text']);
+    expect(toGraphMessage(t.ig.sent[0]!.msg)).toEqual({ attachment: { type: 'file', payload: { url: 'https://site.com/guia.pdf' } } });
+  });
+
+  it('limpar campo e marcar conversa como fechada', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow({
+      start: 'a',
+      nodes: {
+        a: { type: 'action', data: { actions: [{ type: 'set_field', field: 'cupom', value: 'X1' }, { type: 'set_field', field: 'nome', value: 'Maria' }] }, next: 'b' },
+        b: { type: 'action', data: { actions: [{ type: 'clear_field', field: 'cupom' }, { type: 'close_conversation' }] } },
+      },
+    });
+    t.addTrigger(flowId, 'dm_keyword', { keywords: ['oi'] });
+    await t.engine.handleEvent(dm('oi'));
+    const c = t.store.contacts[0]!;
+    expect(await t.store.getFields(c.id)).toEqual({ nome: 'Maria' });
+    expect(t.store.closed.has(c.id)).toBe(true);
+  });
+});

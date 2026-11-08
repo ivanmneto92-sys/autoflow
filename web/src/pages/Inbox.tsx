@@ -9,6 +9,7 @@ interface Conv {
   name: string | null;
   bot_paused_until: string | null;
   last_inbound_at: string | null;
+  closed: boolean;
   last_text: string | null;
   last_direction: string;
   last_source: string;
@@ -21,18 +22,23 @@ interface ContactDetail {
   name: string | null;
   bot_paused_until: string | null;
   last_inbound_at: string | null;
+  closed_at: string | null;
   tags: string[];
   fields: Record<string, unknown>;
   messages: { id: string; direction: 'in' | 'out'; source: string; text: string | null; payload: any; created_at: string }[];
 }
 
 const paused = (iso: string | null) => Boolean(iso && new Date(iso) > new Date());
+/** Fechada = marcada como fechada e o cliente não escreveu depois disso. */
+const isClosed = (d: { closed_at: string | null; last_inbound_at: string | null }) =>
+  Boolean(d.closed_at && (!d.last_inbound_at || new Date(d.last_inbound_at) <= new Date(d.closed_at)));
 
 function messageText(m: ContactDetail['messages'][number]): string {
   if (m.text) return m.text;
   const p = m.payload ?? {};
   if (p.story_mention) return '📸 Marcou você num story';
   if (p.kind === 'image') return '🖼 Imagem';
+  if (p.kind === 'file') return '📎 Arquivo PDF';
   if (p.kind === 'carousel') return `🗂 Carrossel (${p.cards?.length ?? 0} cartões)`;
   if (p.postback) return '🔘 Clicou num botão';
   return '(mensagem sem texto)';
@@ -42,7 +48,7 @@ export function Inbox() {
   const { id } = useParams();
   const nav = useNavigate();
   const toast = useToast();
-  const [filter, setFilter] = useState<'all' | 'human'>('all');
+  const [filter, setFilter] = useState<'all' | 'open' | 'human'>('all');
   const [list, setList] = useState<Conv[] | null>(null);
   const [detail, setDetail] = useState<ContactDetail | null>(null);
   const [text, setText] = useState('');
@@ -104,6 +110,12 @@ export function Inbox() {
     toast(action === 'pause-bot' ? 'Robô pausado para este contato' : 'Robô religado');
   }
 
+  async function setClosed(close: boolean) {
+    await api(`/app/contacts/${id}/${close ? 'close' : 'reopen'}`, { body: {} });
+    setDetail(await api<ContactDetail>(`/app/contacts/${id}`));
+    toast(close ? 'Conversa fechada. Se o cliente escrever de novo, ela reabre sozinha.' : 'Conversa reaberta');
+  }
+
   const windowOpen = detail?.last_inbound_at ? Date.now() - new Date(detail.last_inbound_at).getTime() < 24 * 3600 * 1000 : false;
 
   return (
@@ -115,6 +127,9 @@ export function Inbox() {
             <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
               Todas
             </button>
+            <button className={filter === 'open' ? 'active' : ''} onClick={() => setFilter('open')}>
+              Abertas
+            </button>
             <button className={filter === 'human' ? 'active' : ''} onClick={() => setFilter('human')}>
               Com atendente
             </button>
@@ -123,7 +138,7 @@ export function Inbox() {
         {!list ? (
           <Loading />
         ) : !list.length ? (
-          <Empty title="Nenhuma conversa" text={filter === 'human' ? 'Ninguém aguardando atendente.' : 'As mensagens do Instagram aparecem aqui.'} />
+          <Empty title="Nenhuma conversa" text={filter === 'human' ? 'Ninguém aguardando atendente.' : filter === 'open' ? 'Nenhuma conversa aberta. 🎉' : 'As mensagens do Instagram aparecem aqui.'} />
         ) : (
           list.map((c) => (
             <div key={c.id} className={`inbox-item ${c.id === id ? 'active' : ''}`} onClick={() => nav(`/inbox/${c.id}`)}>
@@ -136,7 +151,7 @@ export function Inbox() {
                   {c.last_direction === 'out' ? (c.last_source === 'human' ? 'Você: ' : '🤖 ') : ''}
                   {c.last_text ?? '…'}
                 </span>
-                {paused(c.bot_paused_until) && <span className="badge badge-warning">atendente</span>}
+                {paused(c.bot_paused_until) ? <span className="badge badge-warning">atendente</span> : c.closed && <span className="badge">✓ fechada</span>}
               </div>
             </div>
           ))
@@ -169,15 +184,26 @@ export function Inbox() {
                   ))}
                 </div>
               </div>
-              {paused(detail.bot_paused_until) ? (
-                <button className="btn btn-sm" onClick={() => bot('resume-bot')}>
-                  <Icon name="play" /> Religar robô
-                </button>
-              ) : (
-                <button className="btn btn-sm" onClick={() => bot('pause-bot')}>
-                  <Icon name="pause" /> Assumir conversa
-                </button>
-              )}
+              <div className="row" style={{ gap: 6, flex: 'none' }}>
+                {isClosed(detail) ? (
+                  <button className="btn btn-sm" onClick={() => setClosed(false)} title="Volta a aparecer em Abertas">
+                    Reabrir
+                  </button>
+                ) : (
+                  <button className="btn btn-sm" onClick={() => setClosed(true)} title="Tira de Abertas. Se o cliente escrever de novo, ela reabre sozinha.">
+                    <Icon name="check" /> Fechar conversa
+                  </button>
+                )}
+                {paused(detail.bot_paused_until) ? (
+                  <button className="btn btn-sm" onClick={() => bot('resume-bot')}>
+                    <Icon name="play" /> Religar robô
+                  </button>
+                ) : (
+                  <button className="btn btn-sm" onClick={() => bot('pause-bot')}>
+                    <Icon name="pause" /> Assumir conversa
+                  </button>
+                )}
+              </div>
             </div>
             <div className="chat-body" ref={bodyRef}>
               {detail.messages.map((m) => (

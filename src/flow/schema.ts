@@ -69,6 +69,8 @@ export const ActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('set_field'), field: z.string(), value: z.string() }),
   z.object({ type: z.literal('set_var'), var: z.string(), value: z.string() }),
   z.object({ type: z.literal('human_handoff'), notify_text: z.string().optional() }),
+  z.object({ type: z.literal('clear_field'), field: z.string() }), // apaga um campo do contato
+  z.object({ type: z.literal('close_conversation') }), // marca a conversa como fechada no Inbox (reabre na próxima mensagem)
   // Registra um pedido (aparece na página Pedidos do painel). O número fica em {{var.order_number}}
   z.object({
     type: z.literal('create_order'),
@@ -107,6 +109,8 @@ export const NodeSchema = z.discriminatedUnion('type', [
     next,
   }),
   z.object({ type: z.literal('image'), data: z.object({ url: httpUrl }), next }),
+  // Arquivo PDF (até 25 MB, limite da Meta)
+  z.object({ type: z.literal('file'), data: z.object({ url: httpUrl, name: z.string().max(120).optional() }), next }),
   z.object({
     type: z.literal('carousel'),
     data: z.object({
@@ -223,6 +227,7 @@ export function nodeTargets(node: FlowNode): (string | null | undefined)[] {
     case 'randomizer':
       return node.data.branches.map((b) => b.next);
     case 'image':
+    case 'file':
     case 'action':
     case 'delay':
     case 'follow_gate':
@@ -238,6 +243,7 @@ function immediateTargets(node: FlowNode): (string | null | undefined)[] {
     case 'message':
     case 'carousel':
     case 'image':
+    case 'file':
     case 'action':
     case 'delay':
       return [node.next];
@@ -264,7 +270,7 @@ export function immediateFromStart(graph: FlowGraph): string[] {
 }
 
 /** Nós que mandam mensagem (contam para o limite de 1 mensagem depois de um comentário). */
-export const SENDS_MESSAGE = new Set<FlowNode['type']>(['message', 'image', 'carousel', 'ask', 'charge', 'follow_gate']);
+export const SENDS_MESSAGE = new Set<FlowNode['type']>(['message', 'image', 'file', 'carousel', 'ask', 'charge', 'follow_gate']);
 
 export interface GraphIssue {
   level: 'error' | 'warning';

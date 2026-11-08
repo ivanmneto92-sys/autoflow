@@ -14,9 +14,9 @@ import { Link, useParams } from 'react-router-dom';
 import { immediateFromStart, SENDS_MESSAGE, validateGraph, type FlowGraph, type FlowNode, type GraphIssue } from '../shared/schema';
 import { FlowPostsModal } from '../components/FlowPostsModal';
 import { Icon, Loading, useToast } from '../components/ui';
-import { NODE_META, PALETTE_GROUPS, START_ID, autoLayout, newNode, removeNode, setOutput, toCanvas, uniqueId, type NodeType } from '../editor/graph';
+import { NODE_META, PALETTE_GROUPS, START_ID, autoLayout, duplicateNodes, newNode, removeNode, setOutput, toCanvas, uniqueId, type NodeType } from '../editor/graph';
 import { Inspector } from '../editor/Inspector';
-import { nodeTypes, WhenContext } from '../editor/NodeCard';
+import { EditorActions, nodeTypes, WhenContext } from '../editor/NodeCard';
 import { isEditable, type Post } from '../lib/posts';
 import { triggerDefaults, type Trigger } from '../lib/triggers';
 import { TriggerModal } from './Triggers';
@@ -47,7 +47,17 @@ function EditorInner() {
   const [flow, setFlow] = useState<FlowRow | null>(null);
   const [graph, setGraph] = useState<FlowGraph | null>(null);
   const [name, setName] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
+  // Seleção: 1 nó abre o painel de edição; vários (Shift + clique) permitem duplicar/excluir juntos
+  const [selection, setSelection] = useState<string[]>([]);
+  const selected = selection.length === 1 ? selection[0]! : null;
+  const setSelected = useCallback((nid: string | null) => setSelection(nid ? [nid] : []), []);
+  // Menu "criar próximo passo" quando a linha é solta no vazio
+  const [drop, setDrop] = useState<{ source: string; handle: string; at: { x: number; y: number }; screen: { x: number; y: number } } | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  // Desfazer / refazer
+  const past = useRef<FlowGraph[]>([]);
+  const future = useRef<FlowGraph[]>([]);
+  const lastPush = useRef(0);
   const [saveState, setSaveState] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   const [publishing, setPublishing] = useState(false);
   const [showStats, setShowStats] = useState(false);
@@ -106,7 +116,18 @@ function EditorInner() {
   }, [id, toast]);
 
   const update = useCallback(
-    (g: FlowGraph, newName?: string) => {
+    (g: FlowGraph, newName?: string, opts?: { history?: boolean }) => {
+      // Guarda o estado anterior para o Desfazer. Mudanças seguidas (arrastar, digitar) viram um passo só.
+      const prev = latest.current.graph;
+      if (prev && opts?.history !== false && newName === undefined && prev !== g) {
+        const now = Date.now();
+        if (now - lastPush.current > 700) {
+          past.current.push(prev);
+          if (past.current.length > 100) past.current.shift();
+        }
+        lastPush.current = now;
+        future.current = [];
+      }
       setGraph(g);
       latest.current = { graph: g, name: newName ?? latest.current.name };
       setSaveState('dirty');
@@ -117,6 +138,82 @@ function EditorInner() {
   );
 
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  const undo = useCallback(() => {
+    const cur = latest.current.graph;
+    const prev = past.current.pop();
+    if (!prev || !cur) return;
+    future.current.push(cur);
+    lastPush.current = 0;
+    update(prev, undefined, { history: false });
+    setSelection((s) => s.filter((x) => prev.nodes[x]));
+  }, [update]);
+
+  const redo = useCallback(() => {
+    const cur = latest.current.graph;
+    const next = future.current.pop();
+    if (!next || !cur) return;
+    past.current.push(cur);
+    lastPush.current = 0;
+    update(next, undefined, { history: false });
+    setSelection((s) => s.filter((x) => next.nodes[x]));
+  }, [update]);
+
+  const duplicate = useCallback(
+    (ids: string[]) => {
+      const g = latest.current.graph;
+      const list = ids.filter((x) => g?.nodes[x]);
+      if (!g || !list.length) return;
+      lastPush.current = 0;
+      const r = duplicateNodes(g, list);
+      update(r.graph);
+      setSelection(r.ids);
+    },
+    [update],
+  );
+
+  const removeMany = useCallback(
+    (ids: string[]) => {
+      let g = latest.current.graph;
+      if (!g) return;
+      lastPush.current = 0;
+      for (const x of ids) if (g.nodes[x]) g = removeNode(g, x);
+      update(g);
+      setSelection([]);
+    },
+    [update],
+  );
+
+  const editorActions = useMemo(
+    () => ({
+      duplicate: (nid: string) => duplicate(selection.includes(nid) ? selection : [nid]),
+      remove: (nid: string) => removeMany(selection.includes(nid) ? selection : [nid]),
+    }),
+    [duplicate, removeMany, selection],
+  );
+
+  // Atalhos: Ctrl+Z desfaz, Ctrl+Shift+Z / Ctrl+Y refaz, Ctrl+D duplica (fora de campos de texto)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.key === 'Escape') return setDrop(null);
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((k === 'z' && e.shiftKey) || k === 'y') {
+        e.preventDefault();
+        redo();
+      } else if (k === 'd' && selection.length) {
+        e.preventDefault();
+        duplicate(selection);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo, duplicate, selection]);
 
   const fromComment = Boolean(triggers?.some((t) => t.type === 'comment')) || pendingPosts.length > 0;
   const { issues, issuesByNode } = useMemo(() => {
@@ -162,7 +259,7 @@ function EditorInner() {
 
   const canvas = useMemo(() => {
     if (!graph) return { nodes: [], edges: [] };
-    const c = toCanvas(graph, { selected, errors: errorNodes, warnings: warnNodes, stats: showStats ? stats : undefined });
+    const c = toCanvas(graph, { selected: new Set(selection), errors: errorNodes, warnings: warnNodes, stats: showStats ? stats : undefined });
     return {
       ...c,
       nodes: c.nodes.map((n) => {
@@ -171,7 +268,7 @@ function EditorInner() {
       }),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph, selected, errorNodes, warnNodes, showStats, stats, dimsVersion]);
+  }, [graph, selection, errorNodes, warnNodes, showStats, stats, dimsVersion]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -179,6 +276,7 @@ function EditorInner() {
       let g = graph;
       let changed = false;
       let measured = false;
+      let sel: string[] | null = null;
       for (const c of changes) {
         if (c.type === 'dimensions' && c.dimensions) {
           const old = dims.current.get(c.id);
@@ -192,15 +290,17 @@ function EditorInner() {
         } else if (c.type === 'remove' && c.id !== START_ID) {
           g = removeNode(g, c.id);
           changed = true;
-          if (selected === c.id) setSelected(null);
-        } else if (c.type === 'select') {
-          if (c.selected && c.id !== START_ID) setSelected(c.id);
+          sel = (sel ?? selection).filter((x) => x !== c.id);
+        } else if (c.type === 'select' && c.id !== START_ID) {
+          const cur: string[] = sel ?? selection;
+          sel = c.selected ? (cur.includes(c.id) ? cur : [...cur, c.id]) : cur.filter((x: string) => x !== c.id);
         }
       }
+      if (sel) setSelection(sel);
       if (changed) update(g);
       else if (measured) setDimsVersion((v) => v + 1);
     },
-    [graph, selected, update],
+    [graph, selection, update],
   );
 
   const onEdgesChange = useCallback(
@@ -232,6 +332,20 @@ function EditorInner() {
     },
     [graph, update],
   );
+
+  /** Cria o passo escolhido no menu, onde a linha foi solta, já ligado à saída de origem. */
+  function createFromDrop(type: NodeType) {
+    if (!graph || !drop) return;
+    const nid = uniqueId(graph, type);
+    const layout = { ...autoLayout(graph), ...(graph.layout ?? {}) };
+    const g: FlowGraph = { ...graph, nodes: { ...graph.nodes, [nid]: newNode(type) }, layout: { ...layout, [nid]: { x: Math.round(drop.at.x), y: Math.round(drop.at.y - 20) } } };
+    if (drop.source === START_ID) g.start = nid;
+    else if (g.nodes[drop.source]) g.nodes[drop.source] = setOutput(g.nodes[drop.source]!, drop.handle, nid);
+    lastPush.current = 0;
+    update(g);
+    setSelected(nid);
+    setDrop(null);
+  }
 
   function addNode(type: NodeType) {
     if (!graph) return;
@@ -328,6 +442,12 @@ function EditorInner() {
         <Link to="/fluxos" className="btn btn-ghost btn-sm">
           <Icon name="back" /> Fluxos
         </Link>
+        <button className="btn btn-ghost btn-sm" onClick={undo} disabled={!past.current.length} title="Desfazer (Ctrl+Z)">
+          ↶
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={redo} disabled={!future.current.length} title="Refazer (Ctrl+Shift+Z)">
+          ↷
+        </button>
         <input
           className="input"
           style={{ maxWidth: 320, fontWeight: 600 }}
@@ -400,10 +520,11 @@ function EditorInner() {
             </div>
           ))}
           <p className="hint" style={{ marginTop: 10 }}>
-            Clique para adicionar. Com um nó selecionado, o novo já entra ligado a ele.
+            Clique para adicionar. Com um nó selecionado, o novo já entra ligado a ele. Ou arraste a bolinha de uma saída até um espaço vazio e escolha o próximo passo.
           </p>
         </div>
-        <div className="canvas">
+        <div className="canvas" ref={canvasRef}>
+          <EditorActions.Provider value={editorActions}>
           <WhenContext.Provider value={whenInfo}>
           <ReactFlow
             nodes={canvas.nodes}
@@ -418,11 +539,28 @@ function EditorInner() {
               const pt = 'changedTouches' in event ? event.changedTouches[0]! : (event as MouseEvent);
               const el = document.elementFromPoint(pt.clientX, pt.clientY)?.closest('.react-flow__node');
               const target = el?.getAttribute('data-id');
-              if (target && target !== conn.fromNode.id)
+              if (target && target !== conn.fromNode.id) {
                 onConnect({ source: conn.fromNode.id, sourceHandle: conn.fromHandle.id ?? null, target, targetHandle: null });
+                return;
+              }
+              // Soltou no vazio: abre o menu para criar o próximo passo ali mesmo
+              const onPane = document.elementFromPoint(pt.clientX, pt.clientY)?.closest('.react-flow__pane');
+              if (!el && onPane && canvasRef.current) {
+                const box = canvasRef.current.getBoundingClientRect();
+                setDrop({
+                  source: conn.fromNode.id,
+                  handle: conn.fromHandle.id ?? 'next',
+                  at: rf.screenToFlowPosition({ x: pt.clientX, y: pt.clientY }),
+                  screen: { x: Math.min(pt.clientX - box.left, box.width - 240), y: Math.min(pt.clientY - box.top, box.height - 370) },
+                });
+              }
             }}
+            multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
             connectionRadius={40}
-            onPaneClick={() => setSelected(null)}
+            onPaneClick={() => {
+              setSelected(null);
+              setDrop(null);
+            }}
             fitView
             fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
             deleteKeyCode={['Delete', 'Backspace']}
@@ -434,9 +572,40 @@ function EditorInner() {
             <MiniMap pannable zoomable style={{ height: 90, width: 140 }} nodeColor={(n) => (n.type === 'start' ? '#5b5bd6' : (NODE_META[(n.data as any)?.node?.type as NodeType]?.color ?? '#999'))} />
           </ReactFlow>
           </WhenContext.Provider>
+          </EditorActions.Provider>
+          {drop && (
+            <div className="drop-menu" style={{ left: Math.max(8, drop.screen.x), top: Math.max(8, drop.screen.y) }}>
+              <div className="drop-menu-title">Próximo passo</div>
+              {PALETTE_GROUPS.flatMap((g) => g.types).map((t) => (
+                <button key={t} onClick={() => createFromDrop(t)}>
+                  <span className="fnode-icon" style={{ background: NODE_META[t].color }}>
+                    {NODE_META[t].icon}
+                  </span>
+                  {NODE_META[t].label}
+                </button>
+              ))}
+              <button className="cancel" onClick={() => setDrop(null)}>
+                Cancelar
+              </button>
+            </div>
+          )}
+          <div className="canvas-hint">Shift + clique seleciona vários · Ctrl+Z desfaz · Ctrl+D duplica</div>
         </div>
         <div className="inspector">
-          {selNode && selected ? (
+          {selection.length > 1 ? (
+            <div className="inspector-section stack">
+              <h3>{selection.length} blocos selecionados</h3>
+              <p className="muted small">Arraste qualquer um deles para mover o grupo. Na cópia, as ligações entre eles vão junto.</p>
+              <div className="row">
+                <button className="btn" onClick={() => duplicate(selection)}>
+                  ⧉ Duplicar
+                </button>
+                <button className="btn btn-danger" onClick={() => removeMany(selection)}>
+                  <Icon name="trash" /> Excluir
+                </button>
+              </div>
+            </div>
+          ) : selNode && selected ? (
             <Inspector
               key={selected}
               id={selected}
@@ -445,10 +614,8 @@ function EditorInner() {
               flows={flows}
               issues={issuesByNode.get(selected) ?? []}
               onChange={(n) => update({ ...graph, nodes: { ...graph.nodes, [selected]: n } })}
-              onDelete={() => {
-                update(removeNode(graph, selected));
-                setSelected(null);
-              }}
+              onDelete={() => removeMany([selected])}
+              onDuplicate={() => duplicate([selected])}
               onMakeStart={() => update({ ...graph, start: selected })}
             />
           ) : (

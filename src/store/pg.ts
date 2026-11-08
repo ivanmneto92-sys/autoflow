@@ -179,6 +179,14 @@ export class PgStore implements Store {
       on conflict (contact_id) do update set values = contact_fields.values || excluded.values, updated_at = now()`;
   }
 
+  async clearField(contactId: string, key: string) {
+    await this.sql`update autoflow.contact_fields set values = values - ${key}::text, updated_at = now() where contact_id = ${contactId}`;
+  }
+
+  async closeConversation(contactId: string) {
+    await this.sql`update autoflow.contacts set closed_at = now(), updated_at = now() where id = ${contactId}`;
+  }
+
   async getActiveSession(contactId: string) {
     const [r] = await this.sql`
       select * from autoflow.sessions

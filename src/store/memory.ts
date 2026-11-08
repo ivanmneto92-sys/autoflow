@@ -95,6 +95,17 @@ export class MemoryStore implements Store {
     this.fields.set(contactId, { ...(this.fields.get(contactId) ?? {}), [key]: value });
   }
 
+  async clearField(contactId: string, key: string) {
+    const f = { ...(this.fields.get(contactId) ?? {}) };
+    delete f[key];
+    this.fields.set(contactId, f);
+  }
+
+  readonly closed = new Map<string, Date>();
+  async closeConversation(contactId: string) {
+    this.closed.set(contactId, new Date());
+  }
+
   async getActiveSession(contactId: string) {
     const s = [...this.sessions].reverse().find((x) => x.contactId === contactId && ACTIVE_STATUSES.includes(x.status));
     return s ? structuredClone(s) : null;

@@ -46,6 +46,7 @@ export type OutMessage =
   | { kind: 'text'; text: string; quickReplies?: QuickReply[] }
   | { kind: 'buttons'; text: string; buttons: Button[] }
   | { kind: 'image'; url: string }
+  | { kind: 'file'; url: string }
   | { kind: 'carousel'; cards: CarouselCard[] };
 
 export interface IgClient {
@@ -84,6 +85,8 @@ export function toGraphMessage(msg: OutMessage): Record<string, unknown> {
       };
     case 'image':
       return { attachment: { type: 'image', payload: { url: msg.url } } };
+    case 'file':
+      return { attachment: { type: 'file', payload: { url: msg.url } } };
     case 'carousel':
       return {
         attachment: {

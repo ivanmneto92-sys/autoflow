@@ -10,6 +10,7 @@ export const START_ID = '__start';
 export const NODE_META: Record<NodeType, { label: string; color: string; icon: string; hint: string }> = {
   message: { label: 'Mensagem', color: '#5b5bd6', icon: '💬', hint: 'Texto com botões (🔒 só seguidores), links ou respostas rápidas' },
   image: { label: 'Imagem', color: '#0ea5e9', icon: '🖼', hint: 'Envia uma foto (do computador ou por link)' },
+  file: { label: 'Arquivo PDF', color: '#ef4444', icon: '📎', hint: 'Envia um PDF no Direct (até 25 MB)' },
   carousel: { label: 'Carrossel', color: '#06b6d4', icon: '🗂', hint: 'Cartões com foto e botões' },
   ask: { label: 'Pergunta', color: '#f59e0b', icon: '❓', hint: 'Espera a resposta e salva num campo' },
   condition: { label: 'Condição', color: '#8b5cf6', icon: '🔀', hint: 'Divide o caminho por regras' },
@@ -25,7 +26,7 @@ export const NODE_META: Record<NodeType, { label: string; color: string; icon: s
 /** Paleta do editor, por grupo. "Só seguidores" e "Fim" seguem funcionando nos fluxos antigos, mas não aparecem mais:
  *  o 🔒 agora é uma opção do botão e um passo sem saída já encerra o fluxo. */
 export const PALETTE_GROUPS: { label: string; types: NodeType[] }[] = [
-  { label: 'Conversar', types: ['message', 'ask', 'image', 'carousel'] },
+  { label: 'Conversar', types: ['message', 'ask', 'image', 'file', 'carousel'] },
   { label: 'Decidir', types: ['condition', 'delay', 'randomizer', 'goto_flow'] },
   { label: 'Fazer', types: ['action', 'charge'] },
 ];
@@ -36,6 +37,8 @@ export function newNode(type: NodeType): FlowNode {
     case 'message':
       return { type, data: { text: 'Escreva a mensagem…' }, next: null };
     case 'image':
+      return { type, data: { url: 'https://' }, next: null };
+    case 'file':
       return { type, data: { url: 'https://' }, next: null };
     case 'carousel':
       return { type, data: { cards: [{ title: 'Título do cartão', subtitle: '', buttons: [] }] }, next: null };
@@ -130,6 +133,7 @@ export function outputsOf(node: FlowNode): Output[] {
       }));
     }
     case 'image':
+    case 'file':
     case 'action':
     case 'delay':
       return [{ id: 'next', label: 'Próximo', target: node.next }];
@@ -197,6 +201,8 @@ export function summarize(node: FlowNode): string {
     }
     case 'image':
       return node.data.url;
+    case 'file':
+      return `📎 ${node.data.name || (node.data.url.startsWith('http') && node.data.url.length > 8 ? 'Arquivo PDF' : 'Escolha o PDF')}`;
     case 'carousel':
       return node.data.cards.map((c) => `• ${c.title}`).join('\n');
     case 'condition':
@@ -230,6 +236,10 @@ export function describeAction(a: any): string {
       return `var ${a.var} = ${a.value}`;
     case 'human_handoff':
       return '👤 Passar para atendente';
+    case 'clear_field':
+      return `🧹 Limpar ${a.field || 'campo'}`;
+    case 'close_conversation':
+      return '✓ Marcar conversa como fechada';
     case 'webhook':
       return `🌐 Webhook ${a.method} ${a.url}`;
     case 'create_order':
@@ -274,7 +284,7 @@ export function autoLayout(graph: FlowGraph): Record<string, { x: number; y: num
 
 export function toCanvas(
   graph: FlowGraph,
-  opts: { selected: string | null; errors: Set<string>; warnings?: Set<string>; stats?: Record<string, number> },
+  opts: { selected: Set<string>; errors: Set<string>; warnings?: Set<string>; stats?: Record<string, number> },
 ): { nodes: Node[]; edges: Edge[] } {
   const layout = { ...autoLayout(graph), ...(graph.layout ?? {}) };
   // O nó "Quando…" é largo: se estiver em cima do primeiro nó (fluxos antigos), afasta para a esquerda
@@ -293,7 +303,7 @@ export function toCanvas(
       type: 'flow',
       position: layout[id] ?? { x: 300, y: 300 },
       data: { node, hasError: opts.errors.has(id), hasWarning: opts.warnings?.has(id) ?? false, count: opts.stats?.[id], isStart: id === graph.start },
-      selected: id === opts.selected,
+      selected: opts.selected.has(id),
     });
     for (const o of outputsOf(node)) {
       if (o.target && graph.nodes[o.target]) {
@@ -316,4 +326,37 @@ export function removeNode(graph: FlowGraph, id: string): FlowGraph {
   }
   if (g.start === id) g.start = Object.keys(g.nodes)[0] ?? '';
   return g;
+}
+
+/** Todas as saídas de um nó desligadas (para colar uma cópia solta). */
+function clearOutputs(node: FlowNode): FlowNode {
+  let n = node;
+  for (const o of outputsOf(node)) n = setOutput(n, o.id, null);
+  return n;
+}
+
+/**
+ * Duplica os nós escolhidos. Ligações entre eles são mantidas (apontando para as cópias);
+ * ligações para fora do grupo ficam soltas. Devolve o grafo novo e os ids das cópias.
+ */
+export function duplicateNodes(graph: FlowGraph, ids: string[], offset = { x: 60, y: 60 }): { graph: FlowGraph; ids: string[] } {
+  const g = structuredClone(graph);
+  const layout = { ...autoLayout(graph), ...(graph.layout ?? {}) };
+  g.layout = { ...layout };
+  const map = new Map<string, string>();
+  for (const id of ids) {
+    const node = graph.nodes[id];
+    if (!node) continue;
+    const nid = uniqueId(g, node.type);
+    map.set(id, nid);
+    g.nodes[nid] = { type: node.type } as FlowNode; // reserva o id para o próximo uniqueId
+  }
+  for (const [id, nid] of map) {
+    let n = clearOutputs(structuredClone(graph.nodes[id]!));
+    for (const o of outputsOf(graph.nodes[id]!)) if (o.target && map.has(o.target)) n = setOutput(n, o.id, map.get(o.target)!);
+    g.nodes[nid] = n;
+    const p = layout[id] ?? { x: 300, y: 300 };
+    g.layout[nid] = { x: p.x + offset.x, y: p.y + offset.y };
+  }
+  return { graph: g, ids: [...map.values()] };
 }

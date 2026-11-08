@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon, useLoad, useToast } from '../components/ui';
 import { api, apiUpload } from '../lib/api';
@@ -13,11 +13,22 @@ type Props = {
   flows: { id: string; name: string }[];
   onChange: (n: FlowNode) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onMakeStart: () => void;
   issues: { level: 'error' | 'warning'; message: string }[];
 };
 
-const VARS = ['{{first_name}}', '{{username}}', '{{field.nome}}', '{{first_name|amigo}}'];
+const EMOJIS = '😀 😁 😂 😊 😍 🥰 😎 🤩 😉 🙌 👏 👍 👇 👉 👆 🙏 💪 🤝 ❤️ 💜 🔥 ✨ ⭐ 🎉 🎁 🎟 💰 💸 🛒 📦 🚀 ✅ ❌ ⚠️ ⏰ 📅 📍 📲 💬 📩 🔒 🔓 🔗 📎 🍕 🍔 🍟 🥤 ☕ 🍰'.split(' ');
+
+const BASE_VARS: { label: string; v: string }[] = [
+  { label: 'Primeiro nome', v: '{{first_name}}' },
+  { label: 'Primeiro nome (ou "amigo")', v: '{{first_name|amigo}}' },
+  { label: '@ do Instagram', v: '{{username}}' },
+];
+
+/** Campos personalizados já usados no workspace (carrega uma vez por sessão). */
+let fieldsCache: Promise<string[]> | null = null;
+const loadFields = () => (fieldsCache ??= api<string[]>('/app/fields').catch(() => ((fieldsCache = null), [])));
 
 function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
   return (
@@ -29,27 +40,79 @@ function Field({ label, hint, children }: { label: string; hint?: ReactNode; chi
   );
 }
 
+/** Texto com contador, emoji e variáveis inseridos onde está o cursor. */
 function TextArea({ value, onChange, max = 1000 }: { value: string; onChange: (v: string) => void; max?: number }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const [open, setOpen] = useState<'emoji' | 'vars' | null>(null);
+  const [fields, setFields] = useState<string[]>([]);
+  useEffect(() => {
+    if (open === 'vars') loadFields().then(setFields);
+  }, [open]);
+  function insert(text: string) {
+    const el = ref.current;
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    const next = (value.slice(0, start) + text + value.slice(end)).slice(0, max);
+    onChange(next);
+    setOpen(null);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + text.length, start + text.length);
+    });
+  }
+  const bytes = new TextEncoder().encode(value).length; // o Instagram conta bytes (emoji vale mais de 1)
   return (
     <>
-      <textarea className="textarea" value={value} maxLength={max} onChange={(e) => onChange(e.target.value)} />
-      <div className="row-between">
-        <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>
-          {VARS.map((v) => (
-            <button key={v} type="button" className="chip" onClick={() => onChange(value + v)} title="Inserir variável">
-              {v}
-            </button>
-          ))}
-        </div>
-        <span className="hint">
-          {value.length}/{max}
+      <textarea ref={ref} className="textarea" value={value} maxLength={max} onChange={(e) => onChange(e.target.value)} />
+      <div className="textarea-tools">
+        <button type="button" className="tool" onClick={() => setOpen(open === 'emoji' ? null : 'emoji')} title="Inserir emoji">
+          😊
+        </button>
+        <button type="button" className="tool mono" onClick={() => setOpen(open === 'vars' ? null : 'vars')} title="Inserir nome, @ ou campo do contato">
+          {'{ }'}
+        </button>
+        <span className="spacer" />
+        <span className={`hint ${bytes > max ? 'text-danger' : ''}`} title="O Instagram aceita até 1000 bytes por mensagem (emoji ocupa mais de 1)">
+          {max - bytes}
         </span>
+        {open === 'emoji' && (
+          <div className="pop emoji-grid">
+            {EMOJIS.map((e) => (
+              <button key={e} type="button" onClick={() => insert(e)}>
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+        {open === 'vars' && (
+          <div className="pop var-list">
+            {BASE_VARS.map((x) => (
+              <button key={x.v} type="button" onClick={() => insert(x.v)}>
+                {x.label} <span className="mono">{x.v}</span>
+              </button>
+            ))}
+            {fields.map((f) => (
+              <button key={f} type="button" onClick={() => insert(`{{field.${f}}}`)}>
+                Campo {f} <span className="mono">{`{{field.${f}}}`}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const f = prompt('Nome do campo (letras minúsculas, números e _):', 'nome')?.trim();
+                if (f && /^[a-z0-9_]+$/.test(f)) insert(`{{field.${f}}}`);
+              }}
+            >
+              + Outro campo…
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
 }
 
-export function Inspector({ id, node, isStart, flows, onChange, onDelete, onMakeStart, issues }: Props) {
+export function Inspector({ id, node, isStart, flows, onChange, onDelete, onDuplicate, onMakeStart, issues }: Props) {
   const meta = NODE_META[node.type];
   const set = (fn: (d: any) => void) => {
     const n = structuredClone(node) as any;
@@ -69,9 +132,14 @@ export function Inspector({ id, node, isStart, flows, onChange, onDelete, onMake
             <div className="muted small mono">{id}</div>
           </div>
         </div>
-        <button className="btn btn-ghost btn-sm btn-danger" onClick={onDelete} title="Excluir nó">
-          <Icon name="trash" />
-        </button>
+        <div className="row" style={{ gap: 2, flex: 'none' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onDuplicate} title="Duplicar (Ctrl+D)">
+            ⧉
+          </button>
+          <button className="btn btn-ghost btn-sm btn-danger" onClick={onDelete} title="Excluir nó">
+            <Icon name="trash" />
+          </button>
+        </div>
       </div>
 
       {issues.length > 0 && (
@@ -90,6 +158,12 @@ export function Inspector({ id, node, isStart, flows, onChange, onDelete, onMake
         {node.type === 'image' && (
           <Field label="Foto" hint="Envie do computador ou cole um link público (JPG/PNG).">
             <ImagePicker value={node.data.url} onChange={(url) => set((d) => (d.url = url))} />
+          </Field>
+        )}
+
+        {node.type === 'file' && (
+          <Field label="Arquivo PDF" hint="Chega no Direct como um arquivo que a pessoa abre ou baixa. Só PDF, até 25 MB (limite da Meta).">
+            <PdfPicker value={node.data.url} name={node.data.name} onChange={(url, name) => set((d) => ((d.url = url), name !== undefined && (name ? (d.name = name) : delete d.name)))} />
           </Field>
         )}
 
@@ -570,6 +644,8 @@ const ACTION_TYPES: [string, string][] = [
   ['set_field', 'Preencher campo'],
   ['set_var', 'Definir variável'],
   ['human_handoff', 'Passar para atendente (pausa o robô)'],
+  ['clear_field', 'Limpar campo'],
+  ['close_conversation', 'Marcar conversa como fechada (Inbox)'],
   ['create_order', 'Registrar pedido (vai para Pedidos)'],
   ['give_coupon', 'Entregar cupom único'],
   ['webhook', 'Chamar webhook (n8n, sistema, Pix…)'],
@@ -590,6 +666,7 @@ function ActionForm({ node, set }: { node: Extract<FlowNode, { type: 'action' }>
                   d.actions[i] =
                     t === 'add_tag' || t === 'remove_tag' ? { type: t, tag: '' }
                     : t === 'set_field' ? { type: t, field: '', value: '' }
+                    : t === 'clear_field' ? { type: t, field: '' }
                     : t === 'set_var' ? { type: t, var: '', value: '' }
                     : t === 'webhook' ? { type: t, url: 'https://', method: 'POST' }
                     : t === 'give_coupon' ? { type: t, campaign_id: '' }
@@ -649,6 +726,9 @@ function ActionForm({ node, set }: { node: Extract<FlowNode, { type: 'action' }>
                 na mensagem seguinte.
               </span>
             </>
+          )}
+          {a.type === 'close_conversation' && (
+            <span className="hint">Some da aba Abertas do Inbox. Se a pessoa mandar mensagem de novo, a conversa reabre sozinha.</span>
           )}
           {a.type === 'give_coupon' && <CouponPicker value={a.campaign_id} onChange={(v) => set((d) => (d.actions[i].campaign_id = v))} />}
           {a.type === 'webhook' && (
@@ -833,6 +913,44 @@ export function ImagePicker({ value, onChange, optional }: { value: string; onCh
         </label>
       </div>
       <input className="input" placeholder={optional ? 'ou cole o link da imagem (opcional)' : 'ou cole o link da imagem'} value={value === 'https://' ? '' : value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+/** PDF: enviar do computador (até 25 MB) ou colar um link público. */
+function PdfPicker({ value, name, onChange }: { value: string; name?: string; onChange: (url: string, name?: string) => void }) {
+  const toast = useToast();
+  const [progress, setProgress] = useState<number | null>(null);
+  async function pick(file?: File) {
+    if (!file) return;
+    try {
+      if (file.type !== 'application/pdf') throw new Error('Escolha um arquivo PDF.');
+      if (file.size > 25 * 1024 * 1024) throw new Error('O PDF passa de 25 MB, que é o limite do Instagram. Comprima antes de enviar.');
+      setProgress(0);
+      const up = await apiUpload(file, setProgress);
+      onChange(up.url, file.name.replace(/\.pdf$/i, '').slice(0, 120));
+    } catch (e) {
+      toast((e as Error).message, true);
+    } finally {
+      setProgress(null);
+    }
+  }
+  const has = /^https?:\/\/.+\..+/.test(value);
+  return (
+    <div className="stack-sm">
+      <div className="row">
+        {has && (
+          <a className="badge" href={value} target="_blank" rel="noreferrer" style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            📎 {name || 'Abrir PDF'}
+          </a>
+        )}
+        <label className="btn btn-sm" style={{ flex: 'none' }}>
+          <input type="file" accept="application/pdf" style={{ display: 'none' }} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} disabled={progress !== null} />
+          <Icon name="upload" size={15} /> {progress !== null ? `Enviando… ${Math.round(progress * 100)}%` : has ? 'Trocar PDF' : 'Enviar PDF'}
+        </label>
+      </div>
+      <input className="input" placeholder="ou cole o link público do PDF" value={value === 'https://' ? '' : value} onChange={(e) => onChange(e.target.value)} />
+      <input className="input" placeholder="Nome para você reconhecer (opcional)" maxLength={120} value={name ?? ''} onChange={(e) => onChange(value, e.target.value)} />
     </div>
   );
 }

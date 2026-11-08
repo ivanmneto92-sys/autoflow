@@ -145,6 +145,10 @@ export async function executeNode(ctx: RunContext, nodeId: string, node: FlowNod
       await ctx.send({ kind: 'image', url: node.data.url }, nodeId);
       return { type: 'next', next: node.next };
 
+    case 'file':
+      await ctx.send({ kind: 'file', url: node.data.url }, nodeId);
+      return { type: 'next', next: node.next };
+
     case 'carousel': {
       const cards = await Promise.all(
         node.data.cards.map(async (c, ci) => ({
@@ -280,6 +284,10 @@ async function runAction(ctx: RunContext, nodeId: string, a: FlowAction): Promis
     case 'set_var':
       ctx.session.vars[a.var] = await render(ctx, a.value);
       return;
+    case 'clear_field':
+      return store.clearField(ctx.contact.id, a.field);
+    case 'close_conversation':
+      return store.closeConversation(ctx.contact.id);
     case 'create_order': {
       const fields = await store.getFields(ctx.contact.id);
       const details = a.fields

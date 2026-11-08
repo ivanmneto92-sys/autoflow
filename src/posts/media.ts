@@ -7,16 +7,20 @@ import { join, resolve } from 'node:path';
 import { config } from '../config.js';
 
 /** Tipos aceitos no upload → extensão do arquivo. Imagem só JPG: é o único formato que a API de publicação aceita. */
-export const MEDIA_TYPES_ALLOWED: Record<string, { ext: string; kind: 'image' | 'video' }> = {
+export const MEDIA_TYPES_ALLOWED: Record<string, { ext: string; kind: 'image' | 'video' | 'file' }> = {
   'image/jpeg': { ext: 'jpg', kind: 'image' },
   'video/mp4': { ext: 'mp4', kind: 'video' },
   'video/quicktime': { ext: 'mov', kind: 'video' },
+  'application/pdf': { ext: 'pdf', kind: 'file' }, // PDF para mandar no Direct (bloco Arquivo)
 };
 
-export const CONTENT_TYPE_BY_EXT: Record<string, string> = { jpg: 'image/jpeg', mp4: 'video/mp4', mov: 'video/quicktime' };
+/** PDF no Direct: limite da Meta. */
+export const PDF_MAX_MB = 25;
+
+export const CONTENT_TYPE_BY_EXT: Record<string, string> = { jpg: 'image/jpeg', mp4: 'video/mp4', mov: 'video/quicktime', pdf: 'application/pdf' };
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-export const FILE_RE = new RegExp(`^${UUID}\\.(jpg|mp4|mov)$`);
+export const FILE_RE = new RegExp(`^${UUID}\\.(jpg|mp4|mov|pdf)$`);
 export const WS_RE = new RegExp(`^${UUID}$`);
 
 export const mediaRoot = () => resolve(process.cwd(), config().MEDIA_DIR);

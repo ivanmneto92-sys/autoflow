@@ -306,6 +306,15 @@ function Bubble({ m, onSend, disabled }: { m: Msg; onSend: (b: SendBody) => void
       </div>
     );
   }
+  if (p.kind === 'file') {
+    return (
+      <div className="bubble in">
+        <a href={p.url} target="_blank" rel="noreferrer">
+          📎 Arquivo PDF
+        </a>
+      </div>
+    );
+  }
   if (p.kind === 'carousel') {
     return (
       <div className="sim-carousel">

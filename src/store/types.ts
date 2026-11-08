@@ -152,6 +152,9 @@ export interface Store {
   removeTag(workspaceId: string, contactId: string, tag: string): Promise<void>;
   getFields(contactId: string): Promise<Record<string, unknown>>;
   setField(contactId: string, key: string, value: unknown): Promise<void>;
+  clearField(contactId: string, key: string): Promise<void>;
+  /** Marca a conversa como fechada no Inbox (volta a abrir quando a pessoa mandar mensagem). */
+  closeConversation(contactId: string): Promise<void>;
 
   getActiveSession(contactId: string): Promise<Session | null>;
   getSession(id: string): Promise<Session | null>;

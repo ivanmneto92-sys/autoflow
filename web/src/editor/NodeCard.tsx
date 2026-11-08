@@ -1,17 +1,68 @@
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, NodeToolbar, Position, type NodeProps } from '@xyflow/react';
 import { createContext, useContext } from 'react';
 import { describeAutomation, type Post } from '../lib/posts';
 import { describeTrigger, TYPES, type Trigger } from '../lib/triggers';
 import type { FlowNode } from '../shared/schema';
-import { mustConnect, NODE_META, outputsOf, summarize } from './graph';
+import { mustConnect, NODE_META, outputsOf, summarize, type Output } from './graph';
 
-export function FlowNodeCard({ data, selected }: NodeProps) {
-  const { node, hasError, hasWarning, count, isStart } = data as { node: FlowNode; hasError: boolean; hasWarning?: boolean; count?: number; isStart: boolean };
-  const meta = NODE_META[node.type];
-  const outs = outputsOf(node);
-  const text = summarize(node);
+/** Ações do editor usadas pelos cartões (duplicar / excluir pela barrinha em cima do nó). */
+export const EditorActions = createContext<{ duplicate: (id: string) => void; remove: (id: string) => void } | null>(null);
+
+/** Mensagem como ela chega: foto, texto inteiro e os botões dentro do balão (cada botão com a sua ligação). */
+function MessageBody({ node, outs }: { node: Extract<FlowNode, { type: 'message' }>; outs: Output[] }) {
+  const out = (id: string) => outs.find((o) => o.id === id);
+  const img = node.data.image_url && /^https?:\/\/.+\..+/.test(node.data.image_url) ? node.data.image_url : '';
   return (
-    <div className={`fnode ${selected ? 'selected' : ''} ${hasError ? 'has-error' : hasWarning ? 'has-warning' : ''}`}>
+    <div className="fmsg">
+      {img && <img className="fmsg-img" src={img} alt="" />}
+      <div className="fmsg-text">{node.data.text}</div>
+      {(node.data.buttons ?? []).map((b, i) => {
+        const o = out(`btn-${i}`);
+        return (
+          <div key={`b${i}`} className={`fmsg-btn ${o && mustConnect(o) ? 'loose' : ''}`} title={o && mustConnect(o) ? 'Não está ligado: arraste a bolinha até o próximo passo' : undefined}>
+            <span>{b.label}</span>
+            <span className="fmsg-btn-icon">{b.followers_only ? '🔒' : b.url ? '🔗' : ''}</span>
+            {o && <Handle type="source" position={Position.Right} id={o.id} className="fmsg-handle" />}
+          </div>
+        );
+      })}
+      {(node.data.quick_replies ?? []).length > 0 && (
+        <div className="fmsg-qrs">
+          {node.data.quick_replies!.map((q, i) => {
+            const o = out(`qr-${i}`);
+            return (
+              <div key={`q${i}`} className={`fmsg-qr ${o && mustConnect(o) ? 'loose' : ''}`}>
+                ⚡ {q.label}
+                {o && <Handle type="source" position={Position.Right} id={o.id} className="fmsg-handle" />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function FlowNodeCard({ id, data, selected }: NodeProps) {
+  const { node, hasError, hasWarning, count, isStart } = data as { node: FlowNode; hasError: boolean; hasWarning?: boolean; count?: number; isStart: boolean };
+  const actions = useContext(EditorActions);
+  const meta = NODE_META[node.type];
+  const allOuts = outputsOf(node);
+  // Na mensagem, botões e respostas rápidas saem de dentro do balão; embaixo fica só o "Próximo"
+  const outs = node.type === 'message' ? allOuts.filter((o) => !/^(btn|qr)-/.test(o.id)) : allOuts;
+  const text = node.type === 'message' ? '' : summarize(node);
+  return (
+    <div className={`fnode ${node.type === 'message' ? 'fnode-msg' : ''} ${selected ? 'selected' : ''} ${hasError ? 'has-error' : hasWarning ? 'has-warning' : ''}`}>
+      {actions && (
+        <NodeToolbar position={Position.Top} className="fnode-toolbar">
+          <button className="nodrag" title="Duplicar (Ctrl+D)" onClick={() => actions.duplicate(id)}>
+            ⧉
+          </button>
+          <button className="nodrag danger" title="Excluir (Delete)" onClick={() => actions.remove(id)}>
+            🗑
+          </button>
+        </NodeToolbar>
+      )}
       <Handle type="target" position={Position.Left} style={{ top: 20 }} />
       <div className="fnode-head">
         <span className="fnode-icon" style={{ background: meta.color }}>
@@ -22,18 +73,7 @@ export function FlowNodeCard({ data, selected }: NodeProps) {
         {isStart && <span className="badge badge-primary">início</span>}
         {count !== undefined && <span className="badge">{count}×</span>}
       </div>
-      {text && <div className="fnode-body">{text}</div>}
-      {node.type === 'message' && node.data.buttons?.some((b) => b.url) && (
-        <div className="fnode-body" style={{ paddingTop: 0 }}>
-          {node.data.buttons
-            .filter((b) => b.url)
-            .map((b, i) => (
-              <div key={i}>
-                {b.followers_only ? '🔒' : '🔗'} {b.label}
-              </div>
-            ))}
-        </div>
-      )}
+      {node.type === 'message' ? <MessageBody node={node} outs={allOuts} /> : text && <div className="fnode-body">{text}</div>}
       {outs.length > 0 && (
         <div className="fnode-outs">
           {outs.map((o) => (
