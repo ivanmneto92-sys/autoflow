@@ -2,7 +2,8 @@
  * Automação rápida "Comentário → Direct": uma tela, sem montar fluxo. Gera um fluxo normal (publicado) que dá
  * para abrir no editor depois. Modo "flow-only" é usado pelo agendador (lá o post e as palavras já são escolhidos).
  */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { ImagePicker } from '../editor/Inspector';
 import { api, formatDateTime } from '../lib/api';
 import { postTitle, TYPE_LABEL, type Post } from '../lib/posts';
@@ -11,6 +12,26 @@ import { LOCK_DEFAULTS } from '../shared/schema';
 import { Icon, Modal, useToast } from './ui';
 
 type Target = { kind: 'any' } | { kind: 'media'; media_id: string } | { kind: 'scheduled'; post: Post };
+
+/** Automação já feita pelo assistente (para copiar ou editar). */
+interface Source {
+  flow_id: string;
+  name: string;
+  updated_at: string;
+  quick: Record<string, any> | null;
+  post: { title: string; thumb: string | null; scheduled_at: string; status: string } | null;
+}
+
+const DEFAULTS = {
+  keywords: [] as string[],
+  public_replies: ['Te mandei no Direct! 📩', 'Corre no Direct 😉', 'Acabei de te chamar no Direct 💌'],
+  once_per_contact: true,
+  opening: { enabled: true, text: 'Oi, {{first_name|tudo bem}}! 👋 Que bom que você comentou. Toque no botão abaixo que eu te mando agora 👇', button: 'Quero receber' },
+  followers_only: false,
+  ask_email: { enabled: false, text: 'Antes, me passa seu melhor e-mail? Assim te aviso das novidades 💌' },
+  message: { text: 'Aqui está o que você pediu 🎉', image_url: '', links: [{ label: 'Acessar', url: '' }] as { label: string; url: string }[] },
+  follow_up: { enabled: false, minutes: 60, text: 'Conseguiu ver? 👀 Deixo o link aqui de novo pra você:' },
+};
 
 const FOLLOW_UP_OPTIONS: [number, string][] = [
   [30, '30 minutos'],
@@ -54,6 +75,77 @@ export function QuickAutomation({
   const [followText, setFollowText] = useState('Conseguiu ver? 👀 Deixo o link aqui de novo pra você:');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  // Copiar de outra automação / editar a deste post
+  const [sources, setSources] = useState<Source[] | null>(null);
+  const [basedOn, setBasedOn] = useState('');
+  const [editing, setEditing] = useState<{ flowId: string; name: string; edited: boolean; fromEditor: boolean } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [ownQuick, setOwnQuick] = useState<Record<string, any> | null>(null);
+
+  /** Preenche o assistente com uma automação guardada (o que faltar volta ao padrão). */
+  function apply(q: Record<string, any> | null) {
+    const d = DEFAULTS;
+    const v = q ?? {};
+    setKeywords((v.keywords ?? d.keywords).join(', '));
+    setReplies(v.public_replies?.length ? v.public_replies : d.public_replies);
+    setOnce(v.once_per_contact ?? d.once_per_contact);
+    setOpening(v.opening?.enabled ?? d.opening.enabled);
+    setOpeningText(v.opening?.text ?? d.opening.text);
+    setOpeningButton(v.opening?.button ?? d.opening.button);
+    setLock(Boolean(v.followers_only));
+    setLockedText(v.locked_text ?? LOCK_DEFAULTS.locked_text);
+    setRetryLabel(v.retry_label ?? LOCK_DEFAULTS.retry);
+    setProfileLabel(v.profile_label ?? LOCK_DEFAULTS.profile);
+    setEmail(v.ask_email?.enabled ?? d.ask_email.enabled);
+    setEmailText(v.ask_email?.text ?? d.ask_email.text);
+    setMsgText(v.message?.text ?? d.message.text);
+    setImage(v.message?.image_url ?? '');
+    setLinks(v.message?.links?.length ? v.message.links.map((l: { label: string; url: string }) => ({ ...l })) : d.message.links.map((l) => ({ ...l })));
+    setFollowUp(v.follow_up?.enabled ?? d.follow_up.enabled);
+    setFollowMinutes(v.follow_up?.minutes ?? d.follow_up.minutes);
+    setFollowText(v.follow_up?.text ?? d.follow_up.text);
+  }
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const list = await api<Source[]>('/app/automations/comment-dm').catch(() => [] as Source[]);
+      const usable = list.filter((x) => x.quick);
+      const own = initialPost?.automation?.flow_id;
+      if (own) {
+        // Post que já tem automação: abre ela para editar
+        const cur = await api<{ flow_id: string; name: string; quick: Record<string, any> | null; edited: boolean }>(`/app/automations/comment-dm/${own}`).catch(() => null);
+        if (!alive) return;
+        if (cur) {
+          setEditing({ flowId: cur.flow_id, name: cur.name, edited: cur.edited, fromEditor: !cur.quick });
+          if (cur.quick) {
+            apply(cur.quick);
+            setOwnQuick(cur.quick);
+            setName(cur.name);
+          }
+        }
+      } else if (usable[0]) {
+        // Já vem com a última automação feita: na maioria das vezes só o link muda
+        apply(usable[0].quick);
+        setBasedOn(usable[0].flow_id);
+      }
+      if (!alive) return;
+      setSources(usable.filter((x) => x.flow_id !== own));
+      setLoading(false);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function pickBase(id: string) {
+    setBasedOn(id);
+    apply(id ? (sources?.find((x) => x.flow_id === id)?.quick ?? null) : ownQuick);
+  }
+
+  const updating = Boolean(editing && !editing.fromEditor);
+  const blocked = Boolean(editing?.fromEditor && initialPost?.status === 'published');
 
   // Depois de um comentário, só a abertura libera as mensagens seguintes
   const needsOpening = lock || email || followUp;
@@ -66,8 +158,9 @@ export function QuickAutomation({
     if (target.kind === 'media' && !target.media_id) return toast('Escolha o post.', true);
     setBusy(true);
     try {
-      const r = await api<{ flow_id: string; notes: string[] }>('/app/automations/comment-dm', {
+      const r = await api<{ flow_id: string; name: string; notes: string[] }>('/app/automations/comment-dm', {
         body: {
+          flow_id: updating ? editing!.flowId : undefined,
           name: name.trim() || undefined,
           target: mode === 'flow-only' ? { kind: 'none' } : target.kind === 'scheduled' ? { kind: 'scheduled', post_id: target.post.id } : target,
           keywords: keywords.split(',').map((k) => k.trim()).filter(Boolean),
@@ -84,9 +177,8 @@ export function QuickAutomation({
         },
       });
       for (const n of r.notes) toast(n);
-      const flowName = name.trim() || `Comentário → Direct${keywords.trim() ? ` (${keywords.split(',')[0]!.trim()})` : ''}`;
-      toast(mode === 'flow-only' ? 'Fluxo criado e publicado ✓' : 'Automação ativa! ✓ Quem comentar já recebe no Direct.');
-      onCreated({ id: r.flow_id, name: flowName });
+      toast(updating ? 'Automação atualizada ✓' : mode === 'flow-only' ? 'Fluxo criado e publicado ✓' : 'Automação ativa! ✓ Quem comentar já recebe no Direct.');
+      onCreated({ id: r.flow_id, name: r.name });
     } catch (e) {
       toast((e as Error).message, true);
       setBusy(false);
@@ -96,7 +188,7 @@ export function QuickAutomation({
   return (
     <Modal
       wide={1040}
-      title="⚡ Automação rápida: Comentário → Direct"
+      title={updating ? '⚡ Editar automação: Comentário → Direct' : '⚡ Automação rápida: Comentário → Direct'}
       onClose={onClose}
       footer={
         <>
@@ -106,14 +198,41 @@ export function QuickAutomation({
           <button className="btn" onClick={onClose}>
             Cancelar
           </button>
-          <button className="btn btn-primary" onClick={save} disabled={busy}>
-            {busy ? 'Ativando…' : mode === 'flow-only' ? 'Criar fluxo' : 'Ativar automação'}
+          <button className="btn btn-primary" onClick={save} disabled={busy || loading || blocked}>
+            {busy ? 'Salvando…' : updating ? 'Salvar alterações' : mode === 'flow-only' ? 'Criar fluxo' : 'Ativar automação'}
           </button>
         </>
       }
     >
       <div className="qa">
         <div className="qa-form">
+          {editing?.fromEditor && (
+            <div className={`alert ${blocked ? 'alert-warning' : 'alert-info'} small`}>
+              Este post usa o fluxo <b>{editing.name}</b>, montado no editor. Para mudar, <Link to={`/fluxos/${editing.flowId}`}>abra o fluxo</Link>
+              {blocked ? '.' : ' — ou preencha abaixo para trocar por uma automação nova.'}
+            </div>
+          )}
+          {updating && editing!.edited && (
+            <div className="alert alert-warning small">
+              Este fluxo foi mudado no editor depois de criado. Salvar aqui substitui essas mudanças pelo que está nesta tela.
+            </div>
+          )}
+          {sources && sources.length > 0 && (
+            <div className="qa-base">
+              <label className="label" htmlFor="qa-base">
+                {updating ? 'Preencher com outra automação' : 'Usar como base'}
+              </label>
+              <select id="qa-base" className="select" value={basedOn} onChange={(e) => pickBase(e.target.value)}>
+                <option value="">{updating ? 'Manter a deste post' : 'Começar do zero'}</option>
+                {sources.map((x) => (
+                  <option key={x.flow_id} value={x.flow_id}>
+                    {x.post ? `${x.post.title} · ${formatDateTime(x.post.scheduled_at)}` : x.name}
+                  </option>
+                ))}
+              </select>
+              {basedOn && <span className="hint">Tudo foi copiado. Confira o link do material: é o que costuma mudar de um post para o outro.</span>}
+            </div>
+          )}
           {mode === 'full' && (
             <>
               <Section n={1} title="Em qual post?">

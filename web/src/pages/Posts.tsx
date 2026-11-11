@@ -280,6 +280,11 @@ function PostRow({
             <Icon name="zap" size={15} /> Automação
           </button>
         )}
+        {a && p.status !== 'publishing' && (
+          <button className="btn btn-sm" onClick={() => onQuick(p)} title="Mudar textos, link ou palavras da automação deste post">
+            <Icon name="zap" size={15} /> Editar automação
+          </button>
+        )}
         {editable && (
           <button className="btn btn-sm" onClick={() => onEdit(p)}>
             <Icon name="edit" size={15} /> Editar

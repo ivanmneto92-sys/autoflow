@@ -200,6 +200,8 @@ export const FlowGraphSchema = z.object({
   nodes: z.record(nodeId, NodeSchema),
   // Posições no editor (ignorado pelo motor)
   layout: z.record(nodeId, z.object({ x: z.number(), y: z.number() })).optional(),
+  // Respostas da Automação rápida que geraram este fluxo (para editar ou copiar depois; ignorado pelo motor)
+  quick: z.record(z.unknown()).optional(),
 });
 
 export type FlowGraph = z.infer<typeof FlowGraphSchema>;
