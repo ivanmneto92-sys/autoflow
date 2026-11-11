@@ -6,7 +6,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { buildCommentFlow, QuickCommentSchema } from '../../flow/quick.js';
+import { buildCommentFlow, quickFromGraph, QuickCommentSchema } from '../../flow/quick.js';
 import { validateGraph, type FlowGraph } from '../../flow/schema.js';
 import { parseTriggerConfig } from '../../flow/triggers.js';
 import { db } from '../../lib/db.js';
@@ -46,42 +46,62 @@ function quickConfig(b: BodyT) {
 const stable = (v: unknown): string =>
   JSON.stringify(v, (_k, val) => (val && typeof val === 'object' && !Array.isArray(val) ? Object.fromEntries(Object.entries(val).sort(([a], [b]) => a.localeCompare(b))) : val));
 
+/** Palavras e respostas públicas de um post (automation) ou gatilho (config). */
+const autoOf = (a: any) =>
+  a ? { keywords: a.keywords ?? [], match: a.match ?? 'contains', public_replies: a.public_replies ?? [], once_per_contact: a.once_per_contact ?? true } : null;
+
+/** Respostas do assistente guardadas no fluxo ou, nos fluxos antigos feitos por ele, reconstruídas. */
+function quickOf(g: FlowGraph, auto: any): Record<string, unknown> | null {
+  if (g.quick) return g.quick;
+  return quickFromGraph(g, autoOf(auto));
+}
+
 export async function automationRoutes(app: FastifyInstance, wsOf: (req: FastifyRequest) => string) {
   const sql = db();
 
   /** Automações feitas pelo assistente, da mais recente para a mais antiga (para "Copiar de outro post"). */
   app.get('/app/automations/comment-dm', async (req) => {
     const rows = await sql`
-      select f.id, f.name, f.updated_at, f.draft_graph->'quick' as quick,
+      select f.id, f.name, f.updated_at, f.draft_graph as graph,
         (select json_build_object('caption', p.caption, 'media_type', p.media_type, 'scheduled_at', p.scheduled_at, 'status', p.status,
-                                  'thumb', p.media->0->>'url')
-           from autoflow.scheduled_posts p where (p.automation->>'flow_id')::uuid = f.id order by p.scheduled_at desc limit 1) as post
+                                  'thumb', p.media->0->>'url', 'automation', p.automation)
+           from autoflow.scheduled_posts p where (p.automation->>'flow_id')::uuid = f.id order by p.scheduled_at desc limit 1) as post,
+        (select t.config from autoflow.triggers t where t.flow_id = f.id and t.type = 'comment' order by t.created_at desc limit 1) as trig
       from autoflow.flows f
-      where f.workspace_id = ${wsOf(req)} and f.status <> 'archived' and f.draft_graph ? 'quick'
+      where f.workspace_id = ${wsOf(req)} and f.status <> 'archived' and (f.draft_graph ? 'quick' or f.draft_graph->'nodes' ? 'entrega')
       order by f.updated_at desc limit 40`;
-    return rows.map((r) => ({
-      flow_id: r.id,
-      name: r.name,
-      updated_at: r.updated_at,
-      quick: r.quick,
-      post: r.post ? { ...r.post, title: captionTitle(r.post.caption, r.post.media_type) } : null,
-    }));
+    return rows
+      .map((r) => ({
+        flow_id: r.id,
+        name: r.name,
+        updated_at: r.updated_at,
+        quick: quickOf(r.graph as FlowGraph, r.post?.automation ?? r.trig),
+        post: r.post ? { caption: r.post.caption, media_type: r.post.media_type, scheduled_at: r.post.scheduled_at, status: r.post.status, thumb: r.post.thumb, title: captionTitle(r.post.caption, r.post.media_type) } : null,
+      }))
+      .filter((r) => r.quick);
   });
 
   /** Uma automação para editar. `edited`: o fluxo foi mudado no editor depois (salvar aqui substitui essas mudanças). */
   app.get('/app/automations/comment-dm/:flowId', async (req) => {
     const flowId = z.string().uuid().parse((req.params as { flowId: string }).flowId);
-    const [f] = await sql`select id, name, draft_graph from autoflow.flows where id = ${flowId} and workspace_id = ${wsOf(req)}`;
+    const [f] = await sql`
+      select f.id, f.name, f.draft_graph,
+        (select p.automation from autoflow.scheduled_posts p where (p.automation->>'flow_id')::uuid = f.id order by p.scheduled_at desc limit 1) as auto,
+        (select t.config from autoflow.triggers t where t.flow_id = f.id and t.type = 'comment' order by t.created_at desc limit 1) as trig
+      from autoflow.flows f where f.id = ${flowId} and f.workspace_id = ${wsOf(req)}`;
     if (!f) throw new HttpError(404, 'Fluxo não encontrado');
     const g = f.draft_graph as FlowGraph;
-    if (!g.quick) return { flow_id: f.id, name: f.name, quick: null, edited: true };
-    const parsed = Body.safeParse({ ...g.quick, target: { kind: 'none' } });
+    const quick = quickOf(g, f.auto ?? f.trig);
+    if (!quick) return { flow_id: f.id, name: f.name, quick: null, edited: true };
+    const parsed = Body.safeParse({ ...quick, target: { kind: 'none' } });
     let edited = true;
     if (parsed.success) {
       const rebuilt = buildCommentFlow(parsed.data).graph;
       edited = stable({ s: rebuilt.start, n: rebuilt.nodes }) !== stable({ s: g.start, n: g.nodes });
     }
-    return { flow_id: f.id, name: f.name, quick: g.quick, edited };
+    // Fluxo antigo que não bate com o que o assistente geraria: foi mudado no editor, não dá para editar por aqui
+    if (!g.quick && edited) return { flow_id: f.id, name: f.name, quick: null, edited: true };
+    return { flow_id: f.id, name: f.name, quick, edited };
   });
 
   app.post('/app/automations/comment-dm', async (req) => {

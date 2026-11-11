@@ -201,3 +201,21 @@ describe('PDF e ações novas', () => {
     expect(t.store.closed.has(c.id)).toBe(true);
   });
 });
+
+describe('automação rápida: copiar e editar', () => {
+  it('reconstrói as respostas de um fluxo antigo feito pelo assistente', async () => {
+    const { buildCommentFlow, quickFromGraph, QuickCommentSchema } = await import('../src/flow/quick.js');
+    const q = QuickCommentSchema.parse({
+      followers_only: true,
+      retry_label: 'Já sigo',
+      ask_email: { enabled: true },
+      message: { text: 'Aqui 👇', links: [{ label: 'Acessar', url: 'https://site.com/RCK080' }] },
+      follow_up: { enabled: true, minutes: 180 },
+    });
+    const g = buildCommentFlow(q).graph;
+    const back = quickFromGraph(g, { keywords: ['GUIA'], public_replies: ['Te mandei!'] })!;
+    expect(back).toMatchObject({ keywords: ['GUIA'], public_replies: ['Te mandei!'], followers_only: true, message: { links: [{ url: 'https://site.com/RCK080' }] } });
+    expect(buildCommentFlow(QuickCommentSchema.parse(back)).graph.nodes).toEqual(g.nodes);
+    expect(quickFromGraph({ start: 'm', nodes: { m: { type: 'message', data: { text: 'x' } } } }, null)).toBeNull();
+  });
+});

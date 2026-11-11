@@ -108,3 +108,50 @@ export function buildCommentFlow(q: QuickComment): { graph: FlowGraph; notes: st
   order.forEach((id, i) => (layout[id] = { x: 360 + i * 330, y: 80 }));
   return { graph: { start: order[0]!, nodes, layout }, notes };
 }
+
+/**
+ * Reconstrói as respostas do assistente a partir de um fluxo criado por ele antes de as respostas serem guardadas
+ * (nós abertura / email / entrega / espera / clicou / lembrete / fim). Devolve null se o fluxo não tem esse formato.
+ * `auto`: palavras e respostas públicas, que ficam no post ou no gatilho (não no fluxo).
+ */
+export function quickFromGraph(
+  g: FlowGraph,
+  auto?: { keywords?: string[]; match?: string; public_replies?: string[]; once_per_contact?: boolean } | null,
+): Record<string, unknown> | null {
+  const allowed = new Set(['abertura', 'email', 'entrega', 'espera', 'clicou', 'lembrete', 'fim']);
+  if (!g?.nodes || Object.keys(g.nodes).some((k) => !allowed.has(k))) return null;
+  const entrega = g.nodes.entrega;
+  if (entrega?.type !== 'message') return null;
+  const ab = g.nodes.abertura;
+  const em = g.nodes.email;
+  const espera = g.nodes.espera;
+  const lembrete = g.nodes.lembrete;
+  const btn = ab?.type === 'message' ? ab.data.buttons?.[0] : undefined;
+  return {
+    keywords: auto?.keywords ?? [],
+    match: auto?.match ?? 'contains',
+    public_replies: auto?.public_replies ?? [],
+    once_per_contact: auto?.once_per_contact ?? true,
+    opening: ab?.type === 'message' ? { enabled: true, text: ab.data.text, button: btn?.label ?? 'Quero receber' } : { enabled: false },
+    followers_only: Boolean(btn?.followers_only),
+    ...(ab?.type === 'message' && btn?.followers_only
+      ? {
+          locked_text: ab.data.locked_text,
+          unlocked_text: ab.data.unlocked_text,
+          ready_text: ab.data.ready_text,
+          retry_label: ab.data.retry_label,
+          profile_label: ab.data.profile_label,
+        }
+      : {}),
+    ask_email: em?.type === 'ask' ? { enabled: true, text: em.data.text } : { enabled: false },
+    message: {
+      text: entrega.data.text,
+      ...(entrega.data.image_url ? { image_url: entrega.data.image_url } : {}),
+      links: (entrega.data.buttons ?? []).filter((b) => b.url).map((b) => ({ label: b.label, url: b.url! })),
+    },
+    follow_up:
+      espera?.type === 'delay' && lembrete?.type === 'message'
+        ? { enabled: true, minutes: espera.data.minutes, text: lembrete.data.text }
+        : { enabled: false },
+  };
+}

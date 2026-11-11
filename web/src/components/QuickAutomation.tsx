@@ -217,6 +217,12 @@ export function QuickAutomation({
               Este fluxo foi mudado no editor depois de criado. Salvar aqui substitui essas mudanças pelo que está nesta tela.
             </div>
           )}
+          {sources && sources.length === 0 && !updating && (
+            <div className="qa-base">
+              <span className="label">Usar como base</span>
+              <span className="hint">Ainda não há outra automação para copiar. Depois de ativar esta, ela aparece aqui e vem preenchida nos próximos posts.</span>
+            </div>
+          )}
           {sources && sources.length > 0 && (
             <div className="qa-base">
               <label className="label" htmlFor="qa-base">
