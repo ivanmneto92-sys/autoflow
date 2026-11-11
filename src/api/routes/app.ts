@@ -240,6 +240,9 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
     return sql`
       select f.id, f.name, f.status, f.updated_at, v.version as published_version,
         (select count(*)::int from autoflow.triggers t where t.flow_id = f.id and t.enabled) as triggers,
+        -- Próximo post agendado que vai usar este fluxo (o gatilho só nasce quando o post é publicado)
+        (select min(p.scheduled_at) from autoflow.scheduled_posts p
+          where (p.automation->>'flow_id')::uuid = f.id and p.status in ('scheduled', 'publishing') and p.trigger_id is null) as next_post_at,
         (select count(*)::int from autoflow.events e where e.flow_id = f.id and e.type = 'flow_started'
            and e.created_at > now() - interval '30 days') as started_30d,
         (select count(*)::int from autoflow.events e where e.flow_id = f.id and e.type = 'flow_completed'

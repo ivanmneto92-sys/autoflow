@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
 
 export function Login() {
-  const [mode, setMode] = useState<'in' | 'up'>('in');
+  // ?cadastro (link da landing page) já abre na criação de conta
+  const [mode, setMode] = useState<'in' | 'up'>(() => (new URLSearchParams(window.location.search).has('cadastro') ? 'up' : 'in'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);

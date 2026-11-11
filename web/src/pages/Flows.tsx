@@ -12,6 +12,7 @@ interface Flow {
   updated_at: string;
   published_version: number | null;
   triggers: number;
+  next_post_at: string | null;
   started_30d: number;
   completed_30d: number;
 }
@@ -97,7 +98,17 @@ export function Flows() {
                       <span className="badge">Rascunho</span>
                     )}
                   </td>
-                  <td>{f.triggers ? <span className="badge badge-primary">{f.triggers} ativo(s)</span> : <span className="muted">nenhum</span>}</td>
+                  <td>
+                    <div className="row wrap" style={{ gap: 4 }}>
+                      {f.triggers > 0 && <span className="badge badge-primary">{f.triggers} ativo(s)</span>}
+                      {f.next_post_at && (
+                        <span className="badge badge-warning" title="O gatilho do comentário é criado sozinho quando o post for publicado">
+                          🗓 post {postWhen(f.next_post_at)}
+                        </span>
+                      )}
+                      {!f.triggers && !f.next_post_at && <span className="muted">nenhum</span>}
+                    </div>
+                  </td>
                   <td>
                     {f.started_30d} / {f.completed_30d}
                   </td>
@@ -175,3 +186,14 @@ export function Flows() {
 }
 
 
+
+/** "hoje 10:00", "amanhã 12:00" ou "12/11 18:00" */
+function postWhen(iso: string): string {
+  const d = new Date(iso);
+  const hm = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(d) - day(new Date())) / 86_400_000);
+  if (diff === 0) return `hoje ${hm}`;
+  if (diff === 1) return `amanhã ${hm}`;
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${hm}`;
+}

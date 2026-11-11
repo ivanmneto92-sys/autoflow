@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>autoflow</title>
+<meta name="description" content="Automação de Direct e comentários do Instagram: responde na hora, entrega links e cupons, capta contatos e registra pedidos.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Visual escuro fixo (como a referência). Layout: página escura, seções em faixas largas; o herói mostra a conversa real do Direct ao lado da promessa. */
+:root {
+  --bg: #120e16;          /* tinta ameixa quase preta */
+  --bg-2: #1a1520;        /* faixas alternadas */
+  --surface: #221b29;     /* cartões */
+  --line: #33293d;        /* bordas */
+  --fg: #f4eef6;          /* texto */
+  --muted: #a99db3;       /* texto secundário */
+  --accent: #ff5c7a;      /* coral do Instagram */
+  --accent-2: #ffb547;    /* âmbar para destaques */
+  --accent-ink: #1a0b10;  /* texto sobre o coral */
+  --bubble-in: #2c2434;
+  --bubble-out: #3b2fd0;
+  --bubble-out-fg: #ffffff;
+  --ok: #3ccf8e;
+  --glow: rgba(255, 92, 122, 0.22);
+  --font-display: 'Bricolage Grotesque', 'Figtree', system-ui, sans-serif;
+  --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+section[id] { scroll-margin-top: 72px; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+a { color: inherit; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.08; margin: 0; text-wrap: balance; letter-spacing: -0.02em; }
+p { margin: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+.wrap { max-width: 1160px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.band { padding-block: 96px; }
+.band.alt { background: var(--bg-2); }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.lead { color: var(--muted); font-size: 18px; max-width: 60ch; }
+.sec-head { display: grid; gap: 14px; margin-bottom: 48px; max-width: 760px; }
+.sec-head h2 { font-size: clamp(30px, 4.4vw, 48px); font-weight: 800; }
+
+.btn { display: inline-flex; align-items: center; gap: 10px; font: 600 16px/1 var(--font-body); padding: 15px 22px; border-radius: 12px; text-decoration: none; border: 1px solid transparent; transition: transform .15s ease, background .15s ease, border-color .15s ease; cursor: pointer; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 10px 30px -10px var(--accent); }
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-ghost { border-color: var(--line); color: var(--fg); background: transparent; }
+.btn-ghost:hover { border-color: var(--muted); }
+.btn svg { width: 18px; height: 18px; }
+
+/* Cabeçalho */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 28px; height: 68px; }
+.logo { display: flex; align-items: center; gap: 10px; font: 800 22px/1 var(--font-display); letter-spacing: -0.03em; text-decoration: none; }
+.logo-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; }
+.logo-mark svg { width: 18px; height: 18px; }
+.nav { display: flex; gap: 22px; margin-left: auto; }
+.nav a { text-decoration: none; color: var(--muted); font-weight: 500; font-size: 15px; }
+.nav a:hover { color: var(--fg); }
+.top .btn { padding: 11px 16px; font-size: 15px; }
+@media (max-width: 860px) { .nav { display: none; } .top .btn { margin-left: auto; } }
+
+/* Herói */
+.hero { position: relative; overflow: hidden; padding-block: 72px 88px; }
+.hero::before { content: ""; position: absolute; width: 720px; height: 720px; right: -160px; top: -220px; background: radial-gradient(closest-side, var(--glow), transparent); pointer-events: none; }
+.hero .wrap { position: relative; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: center; }
+.hero h1 { font-size: clamp(40px, 6.2vw, 76px); font-weight: 800; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero-copy { display: grid; gap: 26px; min-width: 0; }
+.hero-ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); }
+.fine { font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.fine svg { width: 16px; height: 16px; color: var(--ok); flex: none; }
+@media (max-width: 960px) { .hero .wrap { grid-template-columns: 1fr; } }
+
+/* Celular com a conversa */
+.phone { justify-self: center; width: 100%; max-width: 360px; border-radius: 34px; padding: 12px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 40px 80px -40px rgba(0,0,0,.6), 0 0 0 6px color-mix(in srgb, var(--surface) 55%, transparent); }
+.screen { border-radius: 24px; background: var(--bg); overflow: hidden; border: 1px solid var(--line); }
+.ig-post { display: grid; gap: 10px; padding: 14px; border-bottom: 1px solid var(--line); }
+.ig-user { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.avatar { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-2), var(--accent)); flex: none; }
+.avatar.alt { background: linear-gradient(135deg, #6ec5ff, #7a5cff); }
+.comment { display: flex; gap: 8px; font-size: 13px; align-items: flex-start; }
+.comment b { font-weight: 700; }
+.comment .reply { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.dm { padding: 14px; display: grid; gap: 8px; }
+.dm-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+.live { display: inline-flex; align-items: center; gap: 6px; }
+.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: ping 2s infinite; }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent); } 80%, 100% { box-shadow: 0 0 0 8px transparent; } }
+.bubble { max-width: 84%; padding: 9px 12px; border-radius: 16px; font-size: 13.5px; line-height: 1.4; }
+.bubble.in { background: var(--bubble-in); border-bottom-left-radius: 5px; justify-self: start; }
+.bubble.out { background: var(--bubble-out); color: var(--bubble-out-fg); border-bottom-right-radius: 5px; justify-self: end; }
+.bubble .b-btn { display: block; margin-top: 8px; text-align: center; padding: 8px; border-radius: 10px; background: color-mix(in srgb, var(--fg) 8%, transparent); font-weight: 700; font-size: 13px; color: var(--fg); }
+.bubble .b-btn.link { color: var(--accent); }
+.tap { justify-self: end; font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+
+/* Faixa de fatos */
+.facts { border-block: 1px solid var(--line); }
+.facts .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+.fact { padding: 26px 20px; display: grid; gap: 4px; border-left: 1px solid var(--line); min-width: 0; }
+.fact:first-child { border-left: 0; }
+.fact strong { font: 700 22px/1.2 var(--font-display); }
+.fact span { color: var(--muted); font-size: 14px; }
+@media (max-width: 860px) { .facts .wrap { grid-template-columns: 1fr 1fr; } .fact:nth-child(3) { border-left: 0; } .fact:nth-child(n+3) { border-top: 1px solid var(--line); } }
+@media (max-width: 480px) { .facts .wrap { grid-template-columns: 1fr; } .fact { border-left: 0; border-top: 1px solid var(--line); } .fact:first-child { border-top: 0; } }
+
+/* Como funciona (sequência real: 3 passos) */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: s; }
+.step { position: relative; padding: 28px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 10px; align-content: start; }
+.step-n { font: 500 13px/1 var(--font-mono); color: var(--accent); }
+.step h3 { font-size: 22px; font-weight: 700; }
+.step p { color: var(--muted); }
+.step .tag { justify-self: start; margin-top: 6px; font-size: 12.5px; font-weight: 600; color: var(--fg); padding: 5px 10px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); }
+@media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+
+/* Editor (mini fluxo) */
+.builder { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 48px; align-items: center; }
+.builder ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+.builder li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; color: var(--muted); }
+.builder li b { color: var(--fg); font-weight: 600; }
+.builder li svg { width: 22px; height: 22px; color: var(--ok); margin-top: 2px; }
+.canvas { position: relative; border-radius: 20px; border: 1px solid var(--line); background-color: var(--bg);
+  background-image: radial-gradient(color-mix(in srgb, var(--muted) 30%, transparent) 1px, transparent 1px); background-size: 18px 18px;
+  padding: 28px 22px; overflow-x: auto; }
+.flow { display: flex; align-items: center; gap: 0; min-width: 560px; }
+.node { flex: none; width: 168px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); font-size: 12.5px; box-shadow: 0 10px 24px -16px rgba(0,0,0,.6); }
+.node-h { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-weight: 700; }
+.node-h i { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-style: normal; font-size: 11px; color: #fff; }
+.node-b { padding: 8px 10px; color: var(--muted); display: grid; gap: 6px; }
+.node-b .pill { border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; color: var(--accent); font-weight: 700; text-align: center; background: var(--bg-2); }
+.wire { flex: 1; min-width: 28px; height: 2px; background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 10px); position: relative; }
+.wire::after { content: ""; position: absolute; right: -2px; top: -4px; border: 5px solid transparent; border-left-color: var(--accent); border-right: 0; }
+@media (max-width: 960px) { .builder { grid-template-columns: 1fr; } }
+
+/* Recursos */
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+.feature { background: var(--bg); padding: 26px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.band.alt .feature { background: var(--bg-2); }
+.feature svg { width: 26px; height: 26px; color: var(--accent); }
+.feature h3 { font-size: 18px; font-weight: 700; font-family: var(--font-body); letter-spacing: -0.01em; }
+.feature p { color: var(--muted); font-size: 15px; }
+@media (max-width: 960px) { .features { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .features { grid-template-columns: 1fr; } }
+
+/* Para quem */
+.niches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.niche { border-radius: 16px; padding: 22px; border: 1px solid var(--line); background: var(--surface); display: grid; gap: 10px; align-content: start; }
+.niche h3 { font-size: 18px; font-weight: 700; }
+.niche .ex { font-family: var(--font-mono); font-size: 12.5px; color: var(--accent-2); background: var(--bg-2); border-radius: 8px; padding: 8px 10px; border: 1px solid var(--line); }
+.niche p { color: var(--muted); font-size: 14.5px; }
+@media (max-width: 960px) { .niches { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .niches { grid-template-columns: 1fr; } }
+
+/* Planos */
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: stretch; }
+.plan { border-radius: 20px; border: 1px solid var(--line); background: var(--surface); padding: 30px 26px; display: flex; flex-direction: column; gap: 18px; }
+.plan.featured { border-color: var(--accent); box-shadow: 0 30px 60px -40px var(--accent); position: relative; }
+.plan .badge { position: absolute; top: -12px; left: 26px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 99px; }
+.plan h3 { font-size: 22px; font-weight: 700; }
+.plan .for { color: var(--muted); font-size: 14.5px; }
+.price { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.price .cur { font-weight: 600; color: var(--muted); }
+.price .val { font: 800 46px/1 var(--font-display); letter-spacing: -0.03em; }
+.price .per { color: var(--muted); }
+.plan ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; font-size: 15px; }
+.plan li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; }
+.plan li svg { width: 18px; height: 18px; color: var(--ok); margin-top: 3px; }
+.plan .btn { justify-content: center; margin-top: auto; }
+.plans-note { margin-top: 22px; color: var(--muted); font-size: 14px; text-align: center; }
+@media (max-width: 960px) { .plans { grid-template-columns: 1fr; max-width: 520px; margin: 0 auto; } }
+
+/* Dúvidas */
+.faq { display: grid; gap: 10px; max-width: 820px; }
+.faq details { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 0 20px; }
+.faq summary { cursor: pointer; list-style: none; padding: 18px 0; font-weight: 600; font-size: 17px; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font: 500 22px/1 var(--font-mono); color: var(--accent); flex: none; }
+.faq details[open] summary::after { content: "–"; }
+.faq details p { color: var(--muted); padding-bottom: 18px; max-width: 68ch; }
+
+/* Chamada final */
+.final { text-align: left; }
+.final-box { border-radius: 28px; padding: 56px; background: radial-gradient(120% 140% at 100% 0%, var(--glow), transparent 60%), var(--surface); border: 1px solid var(--line); display: grid; grid-template-columns: 1.3fr auto; gap: 32px; align-items: center; }
+.final-box h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 800; }
+.final-box p { color: var(--muted); margin-top: 12px; }
+@media (max-width: 860px) { .final-box { grid-template-columns: 1fr; padding: 36px 24px; } }
+
+footer { border-top: 1px solid var(--line); padding-block: 32px; color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center; }
+
+@media (max-width: 600px) { .band { padding-block: 68px; } .hero { padding-block: 44px 64px; } }
+/* ── A dor ── */
+.pain { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 48px; align-items: start; }
+.feed { border-radius: 20px; border: 1px solid var(--line); background: var(--bg); overflow: hidden; }
+.feed-head { display: flex; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); font-family: var(--font-mono); }
+.feed-head b { color: var(--accent); font-weight: 500; }
+.c-row { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); align-items: center; font-size: 14px; min-width: 0; }
+.c-row .avatar { width: 30px; height: 30px; opacity: .85; }
+.c-row b { font-weight: 700; margin-right: 4px; }
+.c-row small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.c-row .wait { font-family: var(--font-mono); font-size: 11.5px; color: var(--accent-2); white-space: nowrap; }
+.feed-more { padding: 14px 18px; display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 14px; }
+.feed-more strong { color: var(--fg); font: 700 20px/1 var(--font-display); }
+.dm-req { margin: 0 18px 18px; border-radius: 12px; background: var(--bg-2); border: 1px dashed var(--line); padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; }
+.dm-req span:last-child { font: 700 13px/1 var(--font-mono); color: #fff; background: var(--accent); border-radius: 99px; padding: 5px 9px; }
+.pains { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pain-card { border-radius: 16px; padding: 22px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 8px; align-content: start; }
+.pain-card .x { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font: 700 16px/1 var(--font-mono); }
+.pain-card h3 { font-size: 18px; font-weight: 700; font-family: var(--font-body); letter-spacing: -0.01em; }
+.pain-card p { color: var(--muted); font-size: 15px; }
+.pain-quote { grid-column: 1 / -1; border-left: 3px solid var(--accent); padding: 6px 0 6px 18px; font: 600 clamp(19px, 2.2vw, 24px)/1.35 var(--font-display); }
+@media (max-width: 960px) { .pain { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .pains { grid-template-columns: 1fr; } }
+
+/* ── A solução: antes e depois ── */
+.versus { border-radius: 22px; border: 1px solid var(--line); overflow: hidden; }
+.vs-head, .vs-row { display: grid; grid-template-columns: 1fr 1fr; }
+.vs-head div { padding: 18px 24px; font: 700 13px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.vs-head div:first-child { color: var(--muted); background: var(--bg); }
+.vs-head div:last-child { color: var(--accent-ink); background: var(--accent); }
+.vs-row div { padding: 18px 24px; display: grid; grid-template-columns: 22px 1fr; gap: 12px; border-top: 1px solid var(--line); font-size: 16px; min-width: 0; }
+.vs-row div:first-child { color: var(--muted); background: var(--bg); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 55%, transparent); }
+.vs-row div:last-child { background: var(--surface); font-weight: 600; }
+.vs-row .ico { font: 700 15px/1.4 var(--font-mono); text-decoration: none; display: inline-block; }
+.vs-row div:first-child .ico { color: var(--muted); }
+.vs-row div:last-child .ico { color: var(--ok); }
+@media (max-width: 680px) {
+  .vs-head { display: none; }
+  .vs-row { grid-template-columns: 1fr; border-top: 1px solid var(--line); }
+  .vs-row div { border-top: 0; padding: 14px 18px; }
+  .vs-row:first-of-type { border-top: 0; }
+}
+
+/* ── A proposta (CTA forte) ── */
+.offer-band { position: relative; overflow: hidden; }
+.offer-band::before { content: ""; position: absolute; inset: -30% -10% auto; height: 120%; background: radial-gradient(50% 50% at 70% 30%, var(--glow), transparent 70%); pointer-events: none; }
+.offer { position: relative; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 28px; align-items: stretch; }
+.offer h2 { font-size: clamp(34px, 5vw, 60px); font-weight: 800; }
+.offer h2 em { font-style: normal; color: var(--accent); }
+.offer-intro { grid-column: 1 / -1; display: grid; gap: 14px; max-width: 820px; margin-bottom: 18px; }
+.calc { border-radius: 22px; border: 1px solid var(--line); background: var(--surface); padding: 28px; display: grid; gap: 20px; align-content: start; }
+.calc h3 { font-size: 20px; font-weight: 700; }
+.calc label { display: grid; gap: 8px; font-size: 15px; }
+.calc .lbl { display: flex; justify-content: space-between; gap: 12px; }
+.calc .lbl output { font: 500 14px/1.4 var(--font-mono); color: var(--accent-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.calc input[type="range"] { width: 100%; accent-color: var(--accent); }
+.calc-result { border-radius: 16px; background: var(--bg); border: 1px solid var(--line); padding: 20px; display: grid; gap: 6px; }
+.calc-result .big { font: 800 clamp(34px, 5vw, 48px)/1 var(--font-display); color: var(--accent); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.calc-result p { color: var(--muted); font-size: 14.5px; }
+.calc-result p b { color: var(--fg); }
+.deal { border-radius: 22px; padding: 30px; background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, var(--surface)), var(--surface) 55%); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); display: flex; flex-direction: column; gap: 18px; }
+.deal-tag { align-self: flex-start; font: 700 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; padding: 7px 10px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); }
+.deal h3 { font-size: 26px; font-weight: 800; }
+.deal ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.deal li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; font-size: 15.5px; }
+.deal li svg { width: 20px; height: 20px; color: var(--ok); margin-top: 2px; }
+.deal .price { margin-top: 4px; }
+.btn-xl { font-size: 18px; padding: 20px 26px; border-radius: 14px; justify-content: center; width: 100%; }
+.btn-xl.pulse { animation: pulse 2.6s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 10px 30px -10px var(--accent), 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 50% { box-shadow: 0 10px 30px -10px var(--accent), 0 0 0 10px transparent; } }
+.deal .under { color: var(--muted); font-size: 14px; text-align: center; }
+@media (max-width: 960px) { .offer { grid-template-columns: 1fr; } }
+
+/* Barra fixa no celular */
+.sticky-cta { display: none; }
+@media (max-width: 700px) {
+  .sticky-cta { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; gap: 10px; align-items: center;
+    padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--line); }
+  .sticky-cta span { font-size: 13px; color: var(--muted); line-height: 1.3; }
+  .sticky-cta .btn { margin-left: auto; padding: 12px 16px; font-size: 15px; flex: none; }
+  footer { padding-bottom: 96px; }
+}
+
+/* ── Transições ── */
+/* Barra de progresso de leitura no topo */
+.progress { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; height: 3px; z-index: 40; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transform-origin: 0 50%; transform: scaleX(0); pointer-events: none; }
+/* Conversa do herói: as mensagens chegam uma a uma ao abrir a página */
+.dm > :not(.dm-head) { animation: msg-in .5s cubic-bezier(.2,.8,.2,1) backwards; }
+.dm > :nth-child(2) { animation-delay: .35s; }
+.dm > :nth-child(3) { animation-delay: .95s; }
+.dm > :nth-child(4) { animation-delay: 1.35s; }
+.dm > :nth-child(5) { animation-delay: 1.95s; }
+.dm > :nth-child(6) { animation-delay: 2.45s; }
+@keyframes msg-in { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+.hero-copy > * { animation: hero-in .7s cubic-bezier(.2,.8,.2,1) backwards; }
+.hero-copy > :nth-child(2) { animation-delay: .08s; }
+.hero-copy > :nth-child(3) { animation-delay: .16s; }
+.hero-copy > :nth-child(4) { animation-delay: .24s; }
+.hero-copy > :nth-child(5) { animation-delay: .32s; }
+@keyframes hero-in { from { opacity: 0; transform: translateY(18px); } }
+/* Ao rolar, cada bloco sobe e ganha nitidez enquanto entra na tela (navegadores com animação por rolagem) */
+@supports (animation-timeline: view()) {
+  .progress { animation: grow linear both; animation-timeline: scroll(root); }
+  @keyframes grow { to { transform: scaleX(1); } }
+  .reveal { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
+  .reveal-group > * { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
+  .reveal-group > :nth-child(2n) { animation-range: entry 8% entry 68%; }
+  .reveal-group > :nth-child(3n) { animation-range: entry 14% entry 74%; }
+  @keyframes rise { from { opacity: .25; transform: translateY(56px) scale(.97); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+  .band, .facts { animation: band-in linear both; animation-timeline: view(); animation-range: entry 0% entry 40%; }
+  @keyframes band-in { from { clip-path: inset(6% 2% 0 2% round 28px); } to { clip-path: inset(0 0 0 0 round 0); } }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .live i, .btn-xl.pulse, .dm > *, .hero-copy > *, .reveal, .reveal-group > *, .band, .facts, .progress { animation: none !important; }
+  .progress { display: none; }
+  .btn { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/><path d="M8.5 11.5h7M8.5 14.5h4"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></symbol>
+    <symbol id="i-ticket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V6.5A1.5 1.5 0 0 1 4.5 5h15A1.5 1.5 0 0 1 21 6.5V9a3 3 0 0 0 0 6v2.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5V15a3 3 0 0 0 0-6Z"/><path d="M14 5v14" stroke-dasharray="2 2.5"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6L5 8Z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 13.5 6 5h12l2.5 8.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19v-5.5Z"/><path d="M3.5 13.5H8l1.5 2.5h5l1.5-2.5h4.5"/></symbol>
+    <symbol id="i-split" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h5l4-6h7M13 18h7M9 12l4 6"/><path d="m17 3 3 3-3 3M17 15l3 3-3 3"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><path d="M17 14v6M14 17h6"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 10 4-1.6 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  </defs>
+</svg>
+
+<div class="progress" aria-hidden="true"></div>
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="#inicio" aria-label="autoflow, início">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-ink)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17c3 0 4-10 7-10s4 10 7 10"/></svg></span>
+      autoflow
+    </a>
+    <nav class="nav" aria-label="Seções">
+      <a href="#como-funciona">Como funciona</a>
+      <a href="#recursos">Recursos</a>
+      <a href="#planos">Planos</a>
+      <a href="#duvidas">Dúvidas</a>
+    </nav>
+    <a class="btn btn-primary" href="https://autoflow.a2bads.com.br/?cadastro" target="_blank" rel="noopener">Criar conta</a>
+  </div>
+</header>
+
+<main id="inicio">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-copy">
+        <div class="chips">
+          <span class="chip">Comentário → Direct</span>
+          <span class="chip">Só para seguidores</span>
+          <span class="chip">Pedidos e Pix</span>
+        </div>
+        <h1>Cada comentário vira uma <em>conversa</em>. Cada conversa, uma venda.</h1>
+        <p class="lead">O autoflow responde comentários e mensagens do seu Instagram na hora: entrega o material, confere se a pessoa te segue, capta e-mail e telefone e registra pedidos. Funciona 24 horas, sem você no celular.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="https://autoflow.a2bads.com.br/?cadastro" target="_blank" rel="noopener">Criar minha conta <svg><use href="#i-arrow"/></svg></a>
+          <a class="btn btn-ghost" href="#como-funciona">Ver como funciona</a>
+        </div>
+        <p class="fine"><svg><use href="#i-shield"/></svg>Conexão oficial pela Meta. Você nunca passa a sua senha do Instagram.</p>
+      </div>
+
+      <div class="phone" role="img" aria-label="Exemplo: a pessoa comenta GUIA no post, recebe resposta pública e o material no Direct depois de confirmar que segue o perfil">
+        <div class="screen">
+          <div class="ig-post">
+            <div class="ig-user"><span class="avatar"></span>suamarca · Reels</div>
+            <div class="comment"><span class="avatar alt"></span><div><b>julia.martins</b> GUIA 🙋‍♀️<div class="reply">suamarca respondeu: Te mandei no Direct! 📩</div></div></div>
+          </div>
+          <div class="dm">
+            <div class="dm-head"><span>Direct · julia.martins</span><span class="live"><i></i>automático</span></div>
+            <div class="bubble in">Oi, Julia! Aqui está o guia que você pediu 👇<span class="b-btn">🔒 Receber o guia</span></div>
+            <span class="tap">Julia tocou no botão</span>
+            <div class="bubble in">Esse conteúdo é só para quem me segue 💜 Toque em “Abrir perfil”, siga e volte aqui.<span class="b-btn">Já sigo</span></div>
+            <div class="bubble out">Já sigo</div>
+            <div class="bubble in">Prontinho, obrigado por me seguir! 🎉<span class="b-btn link">Abrir o guia ↗</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="facts" aria-label="Destaques">
+    <div class="wrap">
+      <div class="fact"><strong>Segundos</strong><span>entre o comentário e o Direct</span></div>
+      <div class="fact"><strong>38 modelos</strong><span>de fluxo prontos para usar</span></div>
+      <div class="fact"><strong>API oficial</strong><span>da Meta, dentro das regras do Instagram</span></div>
+      <div class="fact"><strong>24 horas</strong><span>atendendo, inclusive de madrugada</span></div>
+    </div>
+  </section>
+
+  <section class="band alt" id="problema">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">O problema</span>
+        <h2>Enquanto você não responde, a venda esfria</h2>
+        <p class="lead">O post funcionou, as pessoas pediram. E agora o seu Instagram está cheio de gente esperando por você.</p>
+      </div>
+      <div class="pain">
+        <div class="feed reveal" aria-label="Exemplo de comentários sem resposta">
+          <div class="feed-head"><span>Comentários do Reels</span><b>sem resposta</b></div>
+          <div class="c-row"><span class="avatar alt"></span><div><b>carol.s</b>quero o link 🙏<small>0 respostas</small></div><span class="wait">há 3 h</span></div>
+          <div class="c-row"><span class="avatar"></span><div><b>bruno_m</b>qual o valor?<small>0 respostas</small></div><span class="wait">há 5 h</span></div>
+          <div class="c-row"><span class="avatar alt"></span><div><b>ana.paula</b>manda no direct pfv<small>0 respostas</small></div><span class="wait">ontem</span></div>
+          <div class="c-row"><span class="avatar"></span><div><b>lucas.f</b>QUERO<small>0 respostas</small></div><span class="wait">ontem</span></div>
+          <div class="feed-more"><strong>+46</strong> comentários pedindo a mesma coisa</div>
+          <div class="dm-req"><span>Solicitações de mensagem</span><span>37</span></div>
+        </div>
+        <div class="pains reveal-group">
+          <article class="pain-card"><span class="x">✕</span><h3>Você responde um por um</h3><p>O mesmo link copiado e colado dezenas de vezes por dia, no lugar de cuidar do negócio.</p></article>
+          <article class="pain-card"><span class="x">✕</span><h3>O cliente compra de outro</h3><p>Quem pergunta o preço às 23h e só recebe resposta de manhã já fechou com o concorrente.</p></article>
+          <article class="pain-card"><span class="x">✕</span><h3>O post bomba e você não dá conta</h3><p>Justo quando mais gente quer comprar, mais gente fica sem resposta.</p></article>
+          <article class="pain-card"><span class="x">✕</span><h3>O contato some</h3><p>A pessoa demonstrou interesse e foi embora sem deixar e-mail, telefone ou motivo para voltar.</p></article>
+          <p class="pain-quote">Cada comentário sem resposta é alguém que levantou a mão para comprar e ficou falando sozinho.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="solucao">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">A solução</span>
+        <h2>O autoflow atende todo mundo na hora, do jeito que você atenderia</h2>
+        <p class="lead">Você escreve a conversa uma vez. A partir daí, cada pessoa que comenta ou chama no Direct recebe resposta em segundos, com o nome dela, e segue até a compra.</p>
+      </div>
+      <div class="versus reveal-group" role="table" aria-label="Antes e depois do autoflow">
+        <div class="vs-head" role="row"><div role="columnheader">Hoje</div><div role="columnheader">Com o autoflow</div></div>
+        <div class="vs-row" role="row"><div role="cell"><span class="ico">✕</span>Responder cada comentário na mão</div><div role="cell"><span class="ico">✓</span>Resposta no post e no Direct em segundos</div></div>
+        <div class="vs-row" role="row"><div role="cell"><span class="ico">✕</span>Cliente esperando até você ver</div><div role="cell"><span class="ico">✓</span>Atendimento 24 horas, inclusive de madrugada</div></div>
+        <div class="vs-row" role="row"><div role="cell"><span class="ico">✕</span>Interessado vai embora sem deixar contato</div><div role="cell"><span class="ico">✓</span>E-mail e telefone salvos dentro da conversa</div></div>
+        <div class="vs-row" role="row"><div role="cell"><span class="ico">✕</span>Link enviado e esquecido</div><div role="cell"><span class="ico">✓</span>Lembrete automático para quem não clicou</div></div>
+        <div class="vs-row" role="row"><div role="cell"><span class="ico">✕</span>Material grátis que não traz seguidor</div><div role="cell"><span class="ico">✓</span>Conteúdo liberado só para quem te segue</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band alt" id="como-funciona">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Como funciona</span>
+        <h2>Do primeiro comentário ao pedido, em três passos</h2>
+        <p class="lead">Você monta uma vez e o autoflow repete para cada pessoa, com o nome dela e no tempo dela.</p>
+      </div>
+      <div class="steps reveal-group">
+        <article class="step">
+          <span class="step-n">Passo 1</span>
+          <h3>Conecte o seu Instagram</h3>
+          <p>Entre com a sua conta profissional pelo login oficial da Meta. Leva menos de um minuto.</p>
+          <span class="tag">Conta Business ou Criador</span>
+        </article>
+        <article class="step">
+          <span class="step-n">Passo 2</span>
+          <h3>Escolha o que acontece</h3>
+          <p>Use um modelo pronto ou monte no editor visual: palavra-chave, resposta no post, mensagem com botões, pergunta, cupom ou Pix.</p>
+          <span class="tag">Automação rápida em 1 minuto</span>
+        </article>
+        <article class="step">
+          <span class="step-n">Passo 3</span>
+          <h3>Publique e acompanhe</h3>
+          <p>Agende o post no próprio autoflow e ligue a automação a ele. Veja quantas pessoas foram atendidas e quantas clicaram.</p>
+          <span class="tag">Resultados por publicação</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap builder">
+      <div class="sec-head reveal" style="margin-bottom:0">
+        <span class="eyebrow">Editor visual</span>
+        <h2>Monte a conversa arrastando blocos</h2>
+        <p class="lead">Cada caixa é uma etapa da conversa. Ligue os botões ao próximo passo e o autoflow segue o caminho que a pessoa escolher.</p>
+        <ul>
+          <li><svg><use href="#i-check"/></svg><span><b>Mensagens com botões</b> que abrem links ou levam ao próximo passo</span></li>
+          <li><svg><use href="#i-check"/></svg><span><b>Condições e Teste A/B</b> para separar quem já comprou, quem segue e quem é novo</span></li>
+          <li><svg><use href="#i-check"/></svg><span><b>Avisos antes de publicar</b> quando algum botão ficou sem caminho</span></li>
+        </ul>
+      </div>
+      <div class="canvas reveal" aria-label="Exemplo de fluxo no editor: Quando alguém comenta, mensagem com botão só para seguidores, pergunta o e-mail e entrega o link">
+        <div class="flow">
+          <div class="node"><div class="node-h"><i style="background:#f59e0b">⚡</i>Quando…</div><div class="node-b">Comentário contém “GUIA”</div></div>
+          <div class="wire"></div>
+          <div class="node"><div class="node-h"><i style="background:#5b5bd6">💬</i>Mensagem</div><div class="node-b">Aqui está o guia 👇<span class="pill">🔒 Receber o guia</span></div></div>
+          <div class="wire"></div>
+          <div class="node"><div class="node-h"><i style="background:#f59e0b">❓</i>Pergunta</div><div class="node-b">Qual o seu melhor e-mail?<span class="pill">salva em e-mail</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band alt" id="recursos">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Recursos</span>
+        <h2>Tudo o que o seu Direct precisa para vender sozinho</h2>
+      </div>
+      <div class="features reveal-group">
+        <article class="feature"><svg><use href="#i-chat"/></svg><h3>Comentário → Direct</h3><p>Responde no post com variações de texto e manda a mensagem no Direct de quem comentou a palavra.</p></article>
+        <article class="feature"><svg><use href="#i-lock"/></svg><h3>Só para seguidores</h3><p>Antes de entregar, confere se a pessoa segue o perfil. Quem não segue recebe o pedido e o botão “Já sigo”.</p></article>
+        <article class="feature"><svg><use href="#i-link"/></svg><h3>Links rastreados</h3><p>Saiba quem clicou em cada link e mande um lembrete só para quem ainda não abriu.</p></article>
+        <article class="feature"><svg><use href="#i-mail"/></svg><h3>Captura de contatos</h3><p>Pergunte nome, e-mail ou telefone dentro da conversa, com validação e lembrete se a pessoa não responder.</p></article>
+        <article class="feature"><svg><use href="#i-ticket"/></svg><h3>Cupons únicos</h3><p>Cada pessoa recebe um código só dela. A lista esgota sozinha e o balcão dá baixa no uso.</p></article>
+        <article class="feature"><svg><use href="#i-bag"/></svg><h3>Pedidos e Pix</h3><p>Monte o pedido pelo Direct, gere o Pix e acompanhe tudo numa tela com aviso sonoro.</p></article>
+        <article class="feature"><svg><use href="#i-cal"/></svg><h3>Agendamento de posts</h3><p>Foto, carrossel e Reels de até 240 MB, já com a automação ligada no momento da publicação.</p></article>
+        <article class="feature"><svg><use href="#i-file"/></svg><h3>PDF no Direct</h3><p>Entregue e-books, cardápios e materiais como arquivo, direto na conversa.</p></article>
+        <article class="feature"><svg><use href="#i-inbox"/></svg><h3>Inbox com atendente</h3><p>Veja todas as conversas, assuma quando precisar e devolva para o robô com um clique.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Para quem é</span>
+        <h2>Feito para quem vende pelo Instagram</h2>
+      </div>
+      <div class="niches reveal-group">
+        <article class="niche"><h3>Criadores e infoprodutores</h3><span class="ex">Comente “AULA”</span><p>Entregue o material, capte o e-mail e leve para a página de vendas.</p></article>
+        <article class="niche"><h3>Restaurantes e delivery</h3><span class="ex">Comente “CARDÁPIO”</span><p>Mande o cardápio, receba o pedido completo e cobre no Pix.</p></article>
+        <article class="niche"><h3>Lojas e e-commerce</h3><span class="ex">Comente “QUERO”</span><p>Envie o link do produto com cupom único e lembre quem não clicou.</p></article>
+        <article class="niche"><h3>Serviços e clínicas</h3><span class="ex">Comente “AGENDA”</span><p>Tire dúvidas, colete os dados e passe para o atendente fechar o horário.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band alt" id="planos">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Planos</span>
+        <h2>Escolha o tamanho da sua operação</h2>
+        <p class="lead">Todos os planos têm o editor visual, os modelos prontos e a conexão oficial com o Instagram.</p>
+      </div>
+      <div class="plans reveal-group">
+        <article class="plan">
+          <div><h3>Essencial</h3><p class="for">Para quem está começando a automatizar</p></div>
+          <div class="price"><span class="cur">R$</span><span class="val">67</span><span class="per">/mês</span></div>
+          <ul>
+            <li><svg><use href="#i-check"/></svg>1 conta do Instagram</li>
+            <li><svg><use href="#i-check"/></svg>Até 1.000 contatos</li>
+            <li><svg><use href="#i-check"/></svg>Comentário → Direct e só para seguidores</li>
+            <li><svg><use href="#i-check"/></svg>Agendamento de posts</li>
+            <li><svg><use href="#i-check"/></svg>Inbox com atendente</li>
+          </ul>
+          <a class="btn btn-ghost" href="https://autoflow.a2bads.com.br/?cadastro" target="_blank" rel="noopener">Começar no Essencial</a>
+        </article>
+        <article class="plan featured">
+          <span class="badge">Mais escolhido</span>
+          <div><h3>Profissional</h3><p class="for">Para quem vende todos os dias pelo Direct</p></div>
+          <div class="price"><span class="cur">R$</span><span class="val">147</span><span class="per">/mês</span></div>
+          <ul>
+            <li><svg><use href="#i-check"/></svg>Até 3 contas do Instagram</li>
+            <li><svg><use href="#i-check"/></svg>Até 10.000 contatos</li>
+            <li><svg><use href="#i-check"/></svg>Tudo do Essencial</li>
+            <li><svg><use href="#i-check"/></svg>Links rastreados e lembretes</li>
+            <li><svg><use href="#i-check"/></svg>Cupons únicos, pedidos e Pix</li>
+          </ul>
+          <a class="btn btn-primary" href="https://autoflow.a2bads.com.br/?cadastro" target="_blank" rel="noopener">Começar no Profissional</a>
+        </article>
+        <article class="plan">
+          <div><h3>Agência</h3><p class="for">Para quem cuida do Instagram de clientes</p></div>
+          <div class="price"><span class="cur">R$</span><span class="val">397</span><span class="per">/mês</span></div>
+          <ul>
+            <li><svg><use href="#i-check"/></svg>Até 10 contas do Instagram</li>
+            <li><svg><use href="#i-check"/></svg>Contatos ilimitados</li>
+            <li><svg><use href="#i-check"/></svg>Tudo do Profissional</li>
+            <li><svg><use href="#i-check"/></svg>Um espaço de trabalho por cliente</li>
+            <li><svg><use href="#i-check"/></svg>Atendimento prioritário</li>
+          </ul>
+          <a class="btn btn-ghost" href="https://autoflow.a2bads.com.br/?cadastro" target="_blank" rel="noopener">Começar no Agência</a>
+        </article>
+      </div>
+      <p class="plans-note">Precisa de mais contas? Fale com a gente e montamos um plano sob medida.</p>
+    </div>
+  </section>
+
+  <section class="band" id="duvidas">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow">Dúvidas</span>
+        <h2>Perguntas frequentes</h2>
+      </div>
+      <div class="faq reveal-group">
+        <details open>
+          <summary>Usar automação pode bloquear o meu Instagram?</summary>
+          <p>O autoflow usa a API oficial da Meta, a mesma das ferramentas homologadas, e segue as regras do Instagram, como mandar só uma mensagem para quem comentou até a pessoa responder. Você não passa a sua senha e pode desconectar a qualquer momento.</p>
+        </details>
+        <details>
+          <summary>Preciso de uma conta profissional?</summary>
+          <p>Sim. A automação funciona com contas Business ou Criador de Conteúdo. A troca é gratuita e feita no próprio app do Instagram, em Configurações.</p>
+        </details>
+        <details>
+          <summary>Preciso saber programar?</summary>
+          <p>Não. Você pode começar por um dos 38 modelos prontos, responder poucas perguntas e publicar. Se quiser mudar algo, o editor visual mostra cada etapa como um bloco.</p>
+        </details>
+        <details>
+          <summary>Como o autoflow sabe se a pessoa me segue?</summary>
+          <p>Quando a pessoa toca no botão da mensagem, o autoflow consulta o Instagram. Quem segue recebe o conteúdo na hora; quem não segue recebe o pedido para seguir e o botão “Já sigo” para tentar de novo.</p>
+        </details>
+        <details>
+          <summary>Posso responder as pessoas eu mesmo?</summary>
+          <p>Pode. Pelo Inbox você vê as conversas, assume quando quiser e o robô pausa para aquele contato. Depois é só religar.</p>
+        </details>
+        <details>
+          <summary>Meus dados ficam seguros?</summary>
+          <p>Os dados ficam em banco de dados protegido e as chaves de acesso ao Instagram são guardadas criptografadas. Cada empresa só enxerga o próprio espaço de trabalho.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="band alt offer-band" id="proposta">
+    <div class="wrap offer">
+      <div class="offer-intro reveal">
+        <span class="eyebrow">A proposta</span>
+        <h2>Pare de deixar venda <em>parada no Direct</em>. Coloque o autoflow para atender hoje.</h2>
+        <p class="lead">Faça a conta com os números do seu Instagram e veja quanto está ficando sem resposta todo mês.</p>
+      </div>
+
+      <form class="calc reveal" id="calc" aria-label="Calculadora de vendas perdidas">
+        <h3>Quanto você deixa na mesa por mês</h3>
+        <label for="c-people"><span class="lbl">Pessoas que comentam ou chamam no Direct por dia <output id="o-people" for="c-people">30</output></span>
+          <input type="range" id="c-people" min="5" max="300" step="5" value="30"></label>
+        <label for="c-answered"><span class="lbl">Quantas você consegue responder rápido hoje <output id="o-answered" for="c-answered">40%</output></span>
+          <input type="range" id="c-answered" min="0" max="90" step="5" value="40"></label>
+        <label for="c-conv"><span class="lbl">Quantas compram quando são atendidas na hora <output id="o-conv" for="c-conv">5%</output></span>
+          <input type="range" id="c-conv" min="1" max="30" step="1" value="5"></label>
+        <label for="c-ticket"><span class="lbl">Valor médio de cada venda <output id="o-ticket" for="c-ticket">R$ 97</output></span>
+          <input type="range" id="c-ticket" min="20" max="2000" step="1" value="97"></label>
+        <div class="calc-result" aria-live="polite">
+          <span class="eyebrow">Ficando sem resposta</span>
+          <span class="big" id="r-lost">R$ 2.619</span>
+          <p id="r-detail">São <b>540 pessoas</b> por mês sem resposta rápida, ou cerca de <b>27 vendas</b> que poderiam ter acontecido.</p>
+          <p id="r-pay">O plano Profissional se paga com <b>2 vendas</b> por mês.</p>
+        </div>
+        <p class="fine" style="margin:0">Estimativa feita com os números que você escolher acima.</p>
+      </form>
+
+      <aside class="deal reveal">
+        <span class="deal-tag">Comece hoje</span>
+        <h3>Plano Profissional</h3>
+        <ul>
+          <li><svg><use href="#i-check"/></svg><span>Comentário → Direct em todos os seus posts e Reels</span></li>
+          <li><svg><use href="#i-check"/></svg><span>Conteúdo só para seguidores, com o botão “Já sigo”</span></li>
+          <li><svg><use href="#i-check"/></svg><span>Captura de e-mail e telefone dentro da conversa</span></li>
+          <li><svg><use href="#i-check"/></svg><span>Links rastreados e lembrete para quem não clicou</span></li>
+          <li><svg><use href="#i-check"/></svg><span>Cupons únicos, pedidos e Pix pelo Direct</span></li>
+          <li><svg><use href="#i-check"/></svg><span>38 modelos prontos e editor visual</span></li>
+        </ul>
+        <div class="price"><span class="cur">R$</span><span class="val">147</span><span class="per">/mês</span></div>
+        <a class="btn btn-primary btn-xl pulse" href="https://autoflow.a2bads.com.br/?cadastro" target="_blank" rel="noopener">Quero automatizar meu Instagram <svg><use href="#i-arrow"/></svg></a>
+        <p class="under">Crie a conta, conecte o Instagram e coloque a primeira automação no ar em poucos minutos.</p>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 autoflow · Automação para Instagram</span>
+    <span>Instagram é uma marca da Meta Platforms, Inc. O autoflow não é afiliado à Meta.</span>
+  </div>
+</footer>
+
+<div class="sticky-cta">
+  <span>Seu Direct respondendo<br>24 horas por dia</span>
+  <a class="btn btn-primary" href="https://autoflow.a2bads.com.br/?cadastro" target="_blank" rel="noopener">Criar conta</a>
+</div>
+
+<script>
+// Calculadora: pessoas/dia × 30 dias × parte sem resposta rápida × conversão × valor médio
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  var num = new Intl.NumberFormat('pt-BR');
+  var PLAN = 147;
+  function update() {
+    var people = +$('c-people').value, answered = +$('c-answered').value / 100, conv = +$('c-conv').value / 100, ticket = +$('c-ticket').value;
+    var waiting = Math.round(people * 30 * (1 - answered));
+    var sales = waiting * conv;
+    var lost = sales * ticket;
+    var payback = Math.max(1, Math.ceil(PLAN / ticket));
+    $('o-people').textContent = num.format(people);
+    $('o-answered').textContent = Math.round(answered * 100) + '%';
+    $('o-conv').textContent = Math.round(conv * 100) + '%';
+    $('o-ticket').textContent = brl.format(ticket);
+    $('r-lost').textContent = brl.format(lost);
+    $('r-detail').innerHTML = 'São <b>' + num.format(waiting) + ' pessoas</b> por mês sem resposta rápida, ou cerca de <b>' + num.format(Math.round(sales)) + (Math.round(sales) === 1 ? ' venda' : ' vendas') + '</b> que poderiam ter acontecido.';
+    $('r-pay').innerHTML = 'O plano Profissional se paga com <b>' + payback + (payback === 1 ? ' venda' : ' vendas') + '</b> por mês.';
+  }
+  ['c-people', 'c-answered', 'c-conv', 'c-ticket'].forEach(function (id) { $(id).addEventListener('input', update); });
+  $('calc').addEventListener('submit', function (e) { e.preventDefault(); });
+  update();
+})();
+</script>
+</body>
+</html>
