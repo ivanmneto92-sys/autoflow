@@ -1,3 +1,4 @@
+import { followersOf, formatFollowers, isInfluencer, isVerified, visibleFields } from '../lib/profile';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Empty, ErrorBox, Icon, Loading, useLoad } from '../components/ui';
@@ -20,10 +21,11 @@ export function Contacts() {
   const nav = useNavigate();
   const [q, setQ] = useState('');
   const [tag, setTag] = useState('');
+  const [onlyInfluencers, setOnlyInfluencers] = useState(false);
   const [search, setSearch] = useState('');
   const { data, error, loading } = useLoad(
-    () => api<Contact[]>(`/app/contacts?limit=300${search ? `&q=${encodeURIComponent(search)}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`),
-    [workspace?.id, search, tag],
+    () => api<Contact[]>(`/app/contacts?limit=300${search ? `&q=${encodeURIComponent(search)}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}${onlyInfluencers ? '&influencers=1' : ''}`),
+    [workspace?.id, search, tag, onlyInfluencers],
   );
   const tags = useLoad(() => api<{ name: string; contacts: number }[]>('/app/tags'), [workspace?.id]);
 
@@ -71,18 +73,33 @@ export function Contacts() {
             </option>
           ))}
         </select>
+        <button
+          className={`btn ${onlyInfluencers ? 'btn-primary' : ''}`}
+          onClick={() => setOnlyInfluencers(!onlyInfluencers)}
+          title="Quem conversou com você e tem 10 mil seguidores ou mais, ou selo de verificado"
+        >
+          ⭐ Influenciadores
+        </button>
       </div>
       <ErrorBox error={error} />
       <div className="card">
         {loading ? (
           <Loading />
         ) : !data?.length ? (
-          <Empty title="Nenhum contato" text="Quando alguém mandar mensagem ou comentar, aparece aqui." />
+          <Empty
+            title={onlyInfluencers ? 'Nenhum influenciador ainda' : 'Nenhum contato'}
+            text={
+              onlyInfluencers
+                ? 'Aparece aqui quem conversar com você no Direct e tiver 10 mil seguidores ou mais, ou selo de verificado.'
+                : 'Quando alguém mandar mensagem ou comentar, aparece aqui.'
+            }
+          />
         ) : (
           <table className="table">
             <thead>
               <tr>
                 <th>Contato</th>
+                <th>Seguidores</th>
                 <th>Tags</th>
                 <th>Dados</th>
                 <th>Última atividade</th>
@@ -96,6 +113,17 @@ export function Contacts() {
                     <div style={{ fontWeight: 600 }}>{c.username ? `@${c.username}` : 'Sem @'}</div>
                     {c.name && <div className="muted small">{c.name}</div>}
                   </td>
+                  <td className="nowrap">
+                    {followersOf(c.fields) !== null ? (
+                      <span className={isInfluencer(c.fields) ? 'badge badge-warning' : 'muted'}>
+                        {isInfluencer(c.fields) ? '⭐ ' : ''}
+                        {formatFollowers(followersOf(c.fields)!)}
+                        {isVerified(c.fields) ? ' ✔' : ''}
+                      </span>
+                    ) : (
+                      <span className="muted small">—</span>
+                    )}
+                  </td>
                   <td>
                     <div className="row wrap" style={{ gap: 4 }}>
                       {c.tags.map((t) => (
@@ -106,7 +134,7 @@ export function Contacts() {
                     </div>
                   </td>
                   <td className="muted small">
-                    {Object.entries(c.fields)
+                    {visibleFields(c.fields)
                       .map(([k, v]) => `${k}: ${String(v)}`)
                       .join(' · ')}
                   </td>

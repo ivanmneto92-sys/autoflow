@@ -486,8 +486,22 @@ async function checkFollowerDetailed(ctx: RunContext): Promise<{ follows: boolea
   try {
     const token = await store.getAccessToken(ctx.account.id);
     const follows = await ctx.deps.ig.getFollowStatus(token, ctx.contact.igsid);
+    // '' = da última vez confirmamos que NÃO seguia; agora segue = seguidor ganho pela automação
+    const before = (await store.getFields(ctx.contact.id))[FOLLOWER_FIELD];
+    const gained = follows && before === '';
     // Guarda quando confirmamos que segue: da próxima vez o 🔒 abre direto (sem o toque extra)
     await store.setField(ctx.contact.id, FOLLOWER_FIELD, follows ? ctx.now().toISOString() : '');
+    if (gained) await store.setField(ctx.contact.id, GAINED_FIELD, ctx.now().toISOString());
+    // Base do funil do post: quantos não seguiam e quantos passaram a seguir
+    await store.logEvent({
+      workspaceId: ctx.account.workspaceId,
+      contactId: ctx.contact.id,
+      flowId: ctx.version.flowId,
+      sessionId: ctx.session.id,
+      nodeId: ctx.session.currentNodeId ?? null,
+      type: 'follow_checked',
+      data: { follows, gained },
+    });
     return { follows, noConsent: false };
   } catch (err) {
     await store.logEvent({
@@ -504,6 +518,8 @@ async function checkFollowerDetailed(ctx: RunContext): Promise<{ follows: boolea
 
 /** Campo do contato com a data da última vez que confirmamos que ele segue a conta. */
 export const FOLLOWER_FIELD = 'seguidor_desde';
+/** Campo do contato com a data em que ele passou a seguir depois de falar com a automação. */
+export const GAINED_FIELD = 'seguiu_pela_automacao';
 const FOLLOWER_CACHE_MS = 30 * 86_400_000;
 
 /**

@@ -157,13 +157,55 @@ export async function postRoutes(app: FastifyInstance, wsOf: (req: FastifyReques
              (select count(*)::int from autoflow.trigger_fires tf where tf.trigger_id = p.trigger_id) as people,
              (select count(distinct l.contact_id)::int from autoflow.links l
                 join autoflow.trigger_fires tf on tf.contact_id = l.contact_id and tf.trigger_id = p.trigger_id
-               where l.flow_id = (p.automation->>'flow_id')::uuid and l.first_clicked_at is not null) as clicked
+               where l.flow_id = (p.automation->>'flow_id')::uuid and l.first_clicked_at is not null) as clicked,
+             -- Seguidores ganhos pela automação: não seguia e passou a seguir depois de falar com ela
+             (select count(distinct e.contact_id)::int from autoflow.events e
+                join autoflow.trigger_fires tf on tf.contact_id = e.contact_id and tf.trigger_id = p.trigger_id
+               where e.flow_id = (p.automation->>'flow_id')::uuid and e.type = 'follow_checked' and (e.data->>'gained')::boolean) as gained
       from autoflow.scheduled_posts p
       join autoflow.ig_accounts a on a.id = p.ig_account_id
       left join autoflow.flows f on f.id = (p.automation->>'flow_id')::uuid
       where p.workspace_id = ${wsOf(req)}
       order by p.scheduled_at desc
       limit 300`;
+  });
+
+  /**
+   * Funil da publicação: do comentário até o pedido. Conta pessoas (não eventos), sempre entre as que a
+   * automação deste post atendeu, para que cada etapa seja um pedaço da anterior.
+   */
+  app.get('/app/posts/:id/funnel', async (req) => {
+    const id = idOf(req);
+    const [p] = await sql`
+      select id, ig_media_id, trigger_id, (automation->>'flow_id')::uuid as flow_id, status, published_at
+      from autoflow.scheduled_posts where id = ${id} and workspace_id = ${wsOf(req)}`;
+    if (!p) throw new HttpError(404, 'Publicação não encontrada');
+    const ws = wsOf(req);
+    const [r] = await sql`
+      with fired as (
+        select contact_id from autoflow.trigger_fires where trigger_id = ${p.trigger_id}
+      ), ev as (
+        select e.contact_id, e.type, e.data from autoflow.events e
+        where e.flow_id = ${p.flow_id} and e.contact_id in (select contact_id from fired)
+      )
+      select
+        (select count(*)::int from autoflow.messages m
+          where m.workspace_id = ${ws} and m.source = 'comment' and m.payload->>'media_id' = ${p.ig_media_id ?? ''}) as comments,
+        (select count(distinct m.contact_id)::int from autoflow.messages m
+          where m.workspace_id = ${ws} and m.source = 'comment' and m.payload->>'media_id' = ${p.ig_media_id ?? ''}) as commenters,
+        (select count(*)::int from fired) as served,
+        (select count(distinct contact_id)::int from ev where type in ('button_clicked', 'gate_clicked')) as tapped,
+        (select count(distinct contact_id)::int from ev where type = 'follow_checked' and not (data->>'follows')::boolean) as not_following,
+        (select count(distinct contact_id)::int from ev where type = 'follow_checked' and (data->>'gained')::boolean) as gained,
+        (select count(distinct l.contact_id)::int from autoflow.links l
+          where l.flow_id = ${p.flow_id} and l.first_clicked_at is not null and l.contact_id in (select contact_id from fired)) as clicked,
+        (select count(*)::int from autoflow.contact_fields cf
+          where cf.contact_id in (select contact_id from fired) and coalesce(cf.values->>'email', '') <> '') as emails,
+        (select count(*)::int from autoflow.orders o
+          where o.flow_id = ${p.flow_id} and o.contact_id in (select contact_id from fired) and o.status <> 'cancelled') as orders,
+        (select coalesce(sum(o.total_cents), 0)::int from autoflow.orders o
+          where o.flow_id = ${p.flow_id} and o.contact_id in (select contact_id from fired) and o.payment_status = 'paid') as paid_cents`;
+    return { post_id: p.id, has_automation: Boolean(p.flow_id), published: p.status === 'published', ...r };
   });
 
   /** Valida tudo o que dá antes de salvar. */

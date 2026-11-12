@@ -4,19 +4,40 @@ import { api } from '../lib/api';
 import { useSession } from '../lib/session';
 import { Icon, useToast } from './ui';
 
-const items = [
-  { to: '/', label: 'Painel', icon: 'home', end: true },
-  { to: '/fluxos', label: 'Fluxos', icon: 'flow' },
-  { to: '/modelos', label: 'Modelos prontos', icon: 'grid' },
-  { to: '/gatilhos', label: 'Gatilhos', icon: 'zap' },
-  { to: '/publicacoes', label: 'Publicações', icon: 'calendar' },
-  { to: '/simulador', label: 'Simulador', icon: 'play' },
-  { to: '/pedidos', label: 'Pedidos', icon: 'bag' },
-  { to: '/cupons', label: 'Cupons', icon: 'ticket' },
-  { to: '/inbox', label: 'Inbox', icon: 'inbox' },
-  { to: '/contatos', label: 'Contatos', icon: 'users' },
-  { to: '/instagram', label: 'Instagram', icon: 'instagram' },
-  { to: '/configuracoes', label: 'Configurações', icon: 'settings' },
+/** Menu por área (mapa do produto). Crescimento, Público, Mercado e Relatórios entram nas próximas fases. */
+const groups: { label?: string; items: { to: string; label: string; icon: string; end?: boolean }[] }[] = [
+  { items: [{ to: '/', label: 'Início', icon: 'home', end: true }] },
+  { label: 'Conteúdo', items: [{ to: '/publicacoes', label: 'Publicações', icon: 'calendar' }] },
+  {
+    label: 'Automação',
+    items: [
+      { to: '/fluxos', label: 'Fluxos', icon: 'flow' },
+      { to: '/modelos', label: 'Modelos prontos', icon: 'grid' },
+      { to: '/gatilhos', label: 'Gatilhos', icon: 'zap' },
+      { to: '/simulador', label: 'Simulador', icon: 'play' },
+    ],
+  },
+  {
+    label: 'Conversas',
+    items: [
+      { to: '/inbox', label: 'Inbox', icon: 'inbox' },
+      { to: '/contatos', label: 'Contatos', icon: 'users' },
+    ],
+  },
+  {
+    label: 'Vendas',
+    items: [
+      { to: '/pedidos', label: 'Pedidos', icon: 'bag' },
+      { to: '/cupons', label: 'Cupons', icon: 'ticket' },
+    ],
+  },
+  {
+    label: 'Configurações',
+    items: [
+      { to: '/instagram', label: 'Contas do Instagram', icon: 'instagram' },
+      { to: '/configuracoes', label: 'Preferências', icon: 'settings' },
+    ],
+  },
 ];
 
 export function Layout() {
@@ -52,16 +73,21 @@ export function Layout() {
         )}
         {workspaces.length === 1 && <div className="muted small" style={{ padding: '0 10px 12px' }}>{workspace?.name}</div>}
         <nav className="nav">
-          {items.map((i) => (
-            <NavLink key={i.to} to={i.to} end={i.end}>
-              <Icon name={i.icon} />
-              {i.label}
-              {i.to === '/pedidos' && newOrders > 0 && (
-                <span className="badge badge-danger" style={{ marginLeft: 'auto' }}>
-                  {newOrders}
-                </span>
-              )}
-            </NavLink>
+          {groups.map((g, gi) => (
+            <div key={gi} className="nav-group">
+              {g.label && <div className="nav-label">{g.label}</div>}
+              {g.items.map((i) => (
+                <NavLink key={i.to} to={i.to} end={i.end}>
+                  <Icon name={i.icon} />
+                  {i.label}
+                  {i.to === '/pedidos' && newOrders > 0 && (
+                    <span className="badge badge-danger" style={{ marginLeft: 'auto' }}>
+                      {newOrders}
+                    </span>
+                  )}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="sidebar-footer">

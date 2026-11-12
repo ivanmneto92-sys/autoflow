@@ -99,7 +99,7 @@ describe('DM, perguntas e atendimento humano', () => {
     await t.engine.handleEvent(dm('Pix'));
 
     const contact = t.store.contacts[0]!;
-    expect(await t.store.getFields(contact.id)).toEqual({
+    expect(await t.store.getFields(contact.id)).toMatchObject({
       nome: 'Maria',
       endereco: 'Rua A, 123 - Centro',
       telefone: '31999998888',

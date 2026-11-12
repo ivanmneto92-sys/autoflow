@@ -52,7 +52,8 @@ export type OutMessage =
 export interface IgClient {
   sendMessage(token: string, igUserId: string, to: Recipient, msg: OutMessage): Promise<{ messageId?: string }>;
   replyToComment(token: string, commentId: string, text: string): Promise<{ id?: string }>;
-  getUserProfile(token: string, igsid: string): Promise<{ name?: string; username?: string }>;
+  /** Perfil de quem conversa (só depois que a pessoa manda mensagem ou toca num botão). */
+  getUserProfile(token: string, igsid: string): Promise<{ name?: string; username?: string; follower_count?: number; is_verified_user?: boolean }>;
   /** A pessoa segue a conta? Só funciona depois que ela mandou mensagem ou clicou num botão. */
   getFollowStatus(token: string, igsid: string): Promise<boolean>;
 }
@@ -175,8 +176,14 @@ export class GraphIgClient implements IgClient {
   }
 
   async getUserProfile(token: string, igsid: string) {
-    if (token === SIM_TOKEN) return { name: 'Cliente Teste', username: 'cliente.teste' };
-    return this.call<{ name?: string; username?: string }>(token, `/${igsid}?fields=name,username`);
+    if (token === SIM_TOKEN) return { name: 'Cliente Teste', username: 'cliente.teste', follower_count: 1234, is_verified_user: false };
+    type P = { name?: string; username?: string; follower_count?: number; is_verified_user?: boolean };
+    try {
+      return await this.call<P>(token, `/${igsid}?fields=name,username,follower_count,is_verified_user`);
+    } catch {
+      // Alguns tipos de token não liberam seguidores/verificado: fica só com nome e @
+      return this.call<P>(token, `/${igsid}?fields=name,username`);
+    }
   }
 
   async getFollowStatus(token: string, igsid: string) {

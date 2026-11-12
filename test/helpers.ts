@@ -21,8 +21,9 @@ export class FakeIg implements IgClient {
     this.publicReplies.push({ commentId, text });
     return { id: 'r1' };
   }
+  profileFollowers = 830;
   async getUserProfile() {
-    return { name: 'Maria Silva', username: 'maria.silva' };
+    return { name: 'Maria Silva', username: 'maria.silva', follower_count: this.profileFollowers, is_verified_user: false };
   }
   followers = new Set<string>();
   followError = false;

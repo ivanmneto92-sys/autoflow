@@ -197,7 +197,9 @@ describe('PDF e ações novas', () => {
     t.addTrigger(flowId, 'dm_keyword', { keywords: ['oi'] });
     await t.engine.handleEvent(dm('oi'));
     const c = t.store.contacts[0]!;
-    expect(await t.store.getFields(c.id)).toEqual({ nome: 'Maria' });
+    const fields = await t.store.getFields(c.id);
+    expect(fields.nome).toBe('Maria');
+    expect('cupom' in fields).toBe(false);
     expect(t.store.closed.has(c.id)).toBe(true);
   });
 });
@@ -217,5 +219,16 @@ describe('automação rápida: copiar e editar', () => {
     expect(back).toMatchObject({ keywords: ['GUIA'], public_replies: ['Te mandei!'], followers_only: true, message: { links: [{ url: 'https://site.com/RCK080' }] } });
     expect(buildCommentFlow(QuickCommentSchema.parse(back)).graph.nodes).toEqual(g.nodes);
     expect(quickFromGraph({ start: 'm', nodes: { m: { type: 'message', data: { text: 'x' } } } }, null)).toBeNull();
+  });
+});
+
+describe('ficha do contato', () => {
+  it('guarda seguidores e verificado de quem conversa', async () => {
+    const t = setup();
+    t.ig.profileFollowers = 48_000;
+    const { flowId } = t.addFlow({ start: 'm', nodes: { m: { type: 'message', data: { text: 'Oi' } } } });
+    t.addTrigger(flowId, 'dm_keyword', { keywords: ['oi'] });
+    await t.engine.handleEvent(dm('oi'));
+    expect(await t.store.getFields(t.store.contacts[0]!.id)).toMatchObject({ ig_seguidores: 48_000, ig_verificado: 'nao' });
   });
 });

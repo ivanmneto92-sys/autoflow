@@ -56,7 +56,9 @@ if (sess!.status === 'waiting_input') {
   await engine.handleEvent({ kind: 'dm', igUserId: IG, senderId: 'u-int', mid: `d4${Date.now()}`, text: '2 pizzas', timestamp: Date.now() });
   await engine.handleEvent({ kind: 'dm', igUserId: IG, senderId: 'u-int', mid: `d5${Date.now()}`, text: 'Pix', timestamp: Date.now() });
   const [f] = await sql`select values from autoflow.contact_fields where contact_id = ${contact!.id}`;
-  assert.deepEqual(f!.values, { nome: 'Ivan', endereco: 'Rua X, 10', telefone: '31988887777', pedido: '2 pizzas', pagamento: 'Pix' });
+  const { nome, endereco, telefone, pedido, pagamento } = f!.values;
+  assert.deepEqual({ nome, endereco, telefone, pedido, pagamento }, { nome: 'Ivan', endereco: 'Rua X, 10', telefone: '31988887777', pedido: '2 pizzas', pagamento: 'Pix' });
+  assert.equal(f!.values.ig_seguidores, 830); // perfil de quem conversa (ficha do contato)
   const tags = await sql`select t.name from autoflow.contact_tags ct join autoflow.tags t on t.id = ct.tag_id where ct.contact_id = ${contact!.id}`;
   assert.ok(tags.some((t) => t.name === 'pedido-feito'));
   const [order] = await sql`select number, summary, details, status from autoflow.orders where contact_id = ${contact!.id}`;

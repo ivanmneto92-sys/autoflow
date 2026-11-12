@@ -131,6 +131,21 @@ describe('botão 🔒 Só para seguidores (direto na mensagem)', () => {
     const open = t.ig.sent[2]!.msg;
     expect(textOf(open)).toContain('obrigado por me seguir');
     expect(open.kind === 'buttons' && open.buttons[0]).toMatchObject({ type: 'web_url', title: 'Receber material', url: 'https://canva.com/guia' });
+
+    // Funil: registrou que não seguia e depois que passou a seguir (seguidor ganho pela automação)
+    const checks = t.store.events.filter((e) => e.type === 'follow_checked').map((e) => e.data);
+    expect(checks).toEqual([{ follows: false, gained: false }, { follows: true, gained: true }]);
+    expect((await t.store.getFields(t.store.contacts[0]!.id)).seguiu_pela_automacao).toBeTruthy();
+  });
+
+  it('quem já seguia não conta como seguidor ganho', async () => {
+    const t = setup();
+    const { flowId } = t.addFlow(canva);
+    t.addTrigger(flowId, 'comment', { keywords: ['canva'], match: 'contains', public_replies: [], once_per_contact: false });
+    t.ig.followers.add('user-1');
+    await t.engine.handleEvent(comment('CANVA'));
+    await t.engine.handleEvent(postback(firstPostback(t.ig.sent[0]!.msg as never), 'user-1', 'Receber material'));
+    expect(t.store.events.filter((e) => e.type === 'follow_checked').map((e) => e.data)).toEqual([{ follows: true, gained: false }]);
   });
 
   it('quem já segue toca e recebe o link na hora', async () => {

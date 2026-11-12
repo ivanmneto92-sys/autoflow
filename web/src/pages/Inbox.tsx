@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Empty, Icon, Loading, useToast } from '../components/ui';
 import { api, formatDateTime, timeAgo } from '../lib/api';
+import { followersOf, formatFollowers, INFLUENCER_MIN, isInfluencer, isVerified, visibleFields } from '../lib/profile';
 
 interface Conv {
   id: string;
@@ -10,6 +11,8 @@ interface Conv {
   bot_paused_until: string | null;
   last_inbound_at: string | null;
   closed: boolean;
+  followers: string | null;
+  verified: boolean | null;
   last_text: string | null;
   last_direction: string;
   last_source: string;
@@ -143,7 +146,14 @@ export function Inbox() {
           list.map((c) => (
             <div key={c.id} className={`inbox-item ${c.id === id ? 'active' : ''}`} onClick={() => nav(`/inbox/${c.id}`)}>
               <div className="row-between">
-                <b>{c.username ? `@${c.username}` : (c.name ?? 'Contato')}</b>
+                <b>
+                  {c.username ? `@${c.username}` : (c.name ?? 'Contato')}
+                  {(Number(c.followers ?? 0) >= INFLUENCER_MIN || c.verified) && (
+                    <span className="badge badge-warning" style={{ marginLeft: 6 }} title="Tem muitos seguidores ou selo de verificado">
+                      ⭐ {c.followers ? formatFollowers(Number(c.followers)) : 'verificado'}
+                    </span>
+                  )}
+                </b>
                 <span className="muted small">{timeAgo(c.last_at)}</span>
               </div>
               <div className="row-between" style={{ marginTop: 3 }}>
@@ -171,13 +181,19 @@ export function Inbox() {
               <div>
                 <b>{detail.username ? `@${detail.username}` : (detail.name ?? 'Contato')}</b>
                 {detail.name && detail.username && <span className="muted"> · {detail.name}</span>}
+                {followersOf(detail.fields) !== null && (
+                  <span className={isInfluencer(detail.fields) ? 'badge badge-warning' : 'muted small'} style={{ marginLeft: 8 }}>
+                    {isInfluencer(detail.fields) ? '⭐ ' : ''}
+                    {formatFollowers(followersOf(detail.fields)!)} seguidores{isVerified(detail.fields) ? ' · verificado' : ''}
+                  </span>
+                )}
                 <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>
                   {detail.tags.map((t) => (
                     <span key={t} className="badge badge-primary">
                       {t}
                     </span>
                   ))}
-                  {Object.entries(detail.fields).map(([k, v]) => (
+                  {visibleFields(detail.fields).map(([k, v]) => (
                     <span key={k} className="badge">
                       {k}: {String(v)}
                     </span>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Empty, ErrorBox, Icon, Loading, Modal, useLoad, useToast } from '../components/ui';
 import { api, apiUpload, formatDateTime } from '../lib/api';
 import { isEditable, MATCH_LABEL, POST_STATUS, postDate, postTitle, TYPE_LABEL, type Match, type MediaType, type Post } from '../lib/posts';
+import { PostFunnel } from '../components/PostFunnel';
 import { QuickAutomation } from '../components/QuickAutomation';
 import { ReplyVariants } from '../components/ReplyVariants';
 import { prepareImage } from '../lib/image';
@@ -31,6 +32,7 @@ export function Posts() {
   const flows = useLoad(() => api<Flow[]>('/app/flows'), [workspace?.id]);
   const [editing, setEditing] = useState<{ post: Post | null; when?: Date } | null>(null);
   const [quickFor, setQuickFor] = useState<Post | null>(null);
+  const [funnelFor, setFunnelFor] = useState<Post | null>(null);
   const [view, setView] = useState<'lista' | 'calendario'>(() => {
     try {
       return localStorage.getItem('autoflow-posts-view') === 'calendario' ? 'calendario' : 'lista';
@@ -158,11 +160,13 @@ export function Posts() {
         </div>
       ) : (
         <div className="stack">
-          <Section title="Próximas" posts={groups.upcoming} onEdit={edit} onAction={action} onQuick={setQuickFor} empty="Nada agendado." />
-          {groups.failed.length > 0 && <Section title="Com erro" posts={groups.failed} onEdit={edit} onAction={action} onQuick={setQuickFor} />}
-          {groups.done.length > 0 && <Section title="Publicadas e canceladas" posts={groups.done} onEdit={edit} onAction={action} onQuick={setQuickFor} />}
+          <Section title="Próximas" posts={groups.upcoming} onEdit={edit} onAction={action} onQuick={setQuickFor} onFunnel={setFunnelFor} empty="Nada agendado." />
+          {groups.failed.length > 0 && <Section title="Com erro" posts={groups.failed} onEdit={edit} onAction={action} onQuick={setQuickFor} onFunnel={setFunnelFor} />}
+          {groups.done.length > 0 && <Section title="Publicadas e canceladas" posts={groups.done} onEdit={edit} onAction={action} onQuick={setQuickFor} onFunnel={setFunnelFor} />}
         </div>
       )}
+
+      {funnelFor && <PostFunnel post={funnelFor} onClose={() => setFunnelFor(null)} />}
 
       {quickFor && (
         <QuickAutomation
@@ -198,6 +202,7 @@ function Section({
   onEdit,
   onAction,
   onQuick,
+  onFunnel,
   empty,
 }: {
   title: string;
@@ -205,6 +210,7 @@ function Section({
   onEdit: (p: Post) => void;
   onAction: (p: Post, what: 'publish-now' | 'cancel' | 'delete') => void;
   onQuick: (p: Post) => void;
+  onFunnel: (p: Post) => void;
   empty?: string;
 }) {
   return (
@@ -218,7 +224,7 @@ function Section({
       ) : (
         <div>
           {posts.map((p) => (
-            <PostRow key={p.id} p={p} onEdit={onEdit} onAction={onAction} onQuick={onQuick} />
+            <PostRow key={p.id} p={p} onEdit={onEdit} onAction={onAction} onQuick={onQuick} onFunnel={onFunnel} />
           ))}
         </div>
       )}
@@ -231,11 +237,13 @@ function PostRow({
   onEdit,
   onAction,
   onQuick,
+  onFunnel,
 }: {
   p: Post;
   onEdit: (p: Post) => void;
   onAction: (p: Post, what: 'publish-now' | 'cancel' | 'delete') => void;
   onQuick: (p: Post) => void;
+  onFunnel: (p: Post) => void;
 }) {
   const st = STATUS[p.status];
   const editable = p.status === 'scheduled' || p.status === 'failed' || p.status === 'cancelled';
@@ -261,11 +269,17 @@ function PostRow({
             {p.trigger_id && <span className="muted"> · gatilho ativo</span>}
           </div>
         )}
-        {a && p.status === 'published' && (p.people ?? 0) > 0 && (
-          <div className="small post-results">
-            📊 <b>{p.people}</b> {p.people === 1 ? 'pessoa atendida' : 'pessoas atendidas'}
-            {' · '}🔗 <b>{p.clicked ?? 0}</b> clicaram no link ({Math.round(((p.clicked ?? 0) / p.people!) * 100)}%)
-          </div>
+        {a && p.status === 'published' && (
+          <button type="button" className="post-results-btn small" onClick={() => onFunnel(p)} title="Ver o funil completo desta publicação">
+            📊 <b>{p.people ?? 0}</b> {p.people === 1 ? 'pessoa atendida' : 'pessoas atendidas'}
+            {(p.gained ?? 0) > 0 && (
+              <>
+                {' · '}➕ <b>{p.gained}</b> {p.gained === 1 ? 'seguidor novo' : 'seguidores novos'}
+              </>
+            )}
+            {' · '}🔗 <b>{p.clicked ?? 0}</b> clicaram
+            <span className="muted"> · ver funil →</span>
+          </button>
         )}
         {p.error && <div className={`alert ${p.status === 'published' ? 'alert-warning' : 'alert-danger'} small`}>{p.error}</div>}
       </div>

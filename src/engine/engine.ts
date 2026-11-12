@@ -12,6 +12,12 @@ import type { Account, Contact, FlowVersion, Session, Trigger } from '../store/t
 import { executeNode, type NodeResult } from './nodes.js';
 import { MAX_STEPS, WINDOW_MS, type EngineDeps, type ScheduledJob } from './types.js';
 
+/** Campos do contato com o perfil do Instagram (ficha do contato e influenciadores). */
+export const FOLLOWERS_FIELD = 'ig_seguidores';
+export const VERIFIED_FIELD = 'ig_verificado';
+const PROFILE_AT_FIELD = 'ig_perfil_em';
+const PROFILE_REFRESH_MS = 7 * 86_400_000;
+
 export class WindowClosedError extends Error {}
 export class QuotaExceededError extends Error {}
 
@@ -163,14 +169,19 @@ export class Engine {
                   : undefined,
     });
 
-    // Completa nome/username na primeira interação (melhor esforço)
-    if (created || !contact.username) {
+    // Completa nome/@ e o tamanho do perfil (seguidores, verificado): na 1ª interação e depois 1 vez por semana
+    const fields = await store.getFields(contact.id);
+    const seen = typeof fields[PROFILE_AT_FIELD] === 'string' ? Date.parse(fields[PROFILE_AT_FIELD] as string) : 0;
+    if (created || !contact.username || this.now().getTime() - seen > PROFILE_REFRESH_MS) {
       try {
         const token = await store.getAccessToken(account.id);
         const p = await ig.getUserProfile(token, e.senderId);
         const firstName = p.name?.split(' ')[0] ?? null;
         await store.updateContact(contact.id, { name: p.name ?? null, username: p.username ?? null, firstName });
         Object.assign(contact, { name: p.name ?? contact.name, username: p.username ?? contact.username, firstName });
+        if (typeof p.follower_count === 'number') await store.setField(contact.id, FOLLOWERS_FIELD, p.follower_count);
+        if (typeof p.is_verified_user === 'boolean') await store.setField(contact.id, VERIFIED_FIELD, p.is_verified_user ? 'sim' : 'nao');
+        await store.setField(contact.id, PROFILE_AT_FIELD, this.now().toISOString());
       } catch {
         /* perfil pode não estar disponível */
       }

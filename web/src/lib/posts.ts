@@ -31,6 +31,7 @@ export interface Post {
   /** Resultados: pessoas atendidas pela automação do post e quantas clicaram num link */
   people?: number;
   clicked?: number;
+  gained?: number;
 }
 
 export const POST_STATUS: Record<PostStatus, { label: string; cls: string }> = {

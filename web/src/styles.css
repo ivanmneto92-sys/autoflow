@@ -480,3 +480,21 @@ p { margin: 0; }
 .text-danger { color: var(--danger) !important; }
 .qa-base { display: grid; gap: 6px; padding: 12px 14px; border: 1px dashed var(--primary); border-radius: 10px; background: var(--primary-soft); }
 .qa-base .label { margin: 0; }
+/* Funil da publicação */
+.funnel-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.funnel-tile { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
+.funnel-tile.accent { border-color: var(--primary); background: var(--primary-soft); }
+.funnel-n { font-size: 26px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.funnel-label { font-weight: 600; }
+.funnel { display: grid; gap: 12px; }
+.funnel-step { display: grid; gap: 4px; }
+.funnel-bar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.funnel-bar span { display: block; height: 100%; background: var(--primary); border-radius: 99px; }
+@media (max-width: 640px) { .funnel-tiles { grid-template-columns: 1fr; } }
+.post-results-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--success); text-align: left; cursor: pointer; }
+.post-results-btn:hover { text-decoration: underline; }
+.nowrap { white-space: nowrap; }
+/* Menu por área */
+.nav { gap: 10px; overflow-y: auto; }
+.nav-group { display: flex; flex-direction: column; gap: 2px; }
+.nav-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 2px 10px 2px; }

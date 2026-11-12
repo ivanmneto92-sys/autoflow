@@ -420,7 +420,13 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
   // ───────────── Contatos e inbox ─────────────
   app.get('/app/contacts', async (req) => {
     const q = z
-      .object({ q: z.string().optional(), tag: z.string().optional(), limit: z.coerce.number().min(1).max(500).default(100) })
+      .object({
+        q: z.string().optional(),
+        tag: z.string().optional(),
+        // Influenciadores: 10 mil seguidores ou mais, ou verificado (do perfil de quem conversou)
+        influencers: z.coerce.boolean().optional(),
+        limit: z.coerce.number().min(1).max(500).default(100),
+      })
       .parse(req.query);
     const like = q.q ? `%${q.q}%` : null;
     return sql`
@@ -433,7 +439,8 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
         ${like ? sql`and (c.username ilike ${like} or c.name ilike ${like})` : sql``}
         ${q.tag ? sql`and exists (select 1 from autoflow.contact_tags ct join autoflow.tags t on t.id = ct.tag_id
                                   where ct.contact_id = c.id and t.name = ${q.tag})` : sql``}
-      order by c.updated_at desc limit ${q.limit}`;
+        ${q.influencers ? sql`and (coalesce((cf.values->>'ig_seguidores')::numeric, 0) >= 10000 or cf.values->>'ig_verificado' = 'sim')` : sql``}
+      order by ${q.influencers ? sql`coalesce((cf.values->>'ig_seguidores')::numeric, 0) desc,` : sql``} c.updated_at desc limit ${q.limit}`;
   });
 
   app.get('/app/tags', async (req) => {
@@ -448,7 +455,7 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
     const rows = await sql`
       select distinct k from autoflow.contact_fields cf join autoflow.contacts c on c.id = cf.contact_id,
         jsonb_object_keys(cf.values) k
-      where c.workspace_id = ${wsOf(req)} and k !~ '^(seguidor_desde)$' order by k limit 100`;
+      where c.workspace_id = ${wsOf(req)} and k !~ '^(seguidor_desde|ig_perfil_em|ig_verificado|seguiu_pela_automacao)$' order by k limit 100`;
     return rows.map((r) => r.k as string);
   });
 
@@ -458,6 +465,8 @@ export async function appRoutes(app: FastifyInstance, opts: { verifyToken?: Toke
     const closed = sql`(c.closed_at is not null and (c.last_inbound_at is null or c.last_inbound_at <= c.closed_at))`;
     return sql`
       select c.id, c.username, c.name, c.bot_paused_until, c.last_inbound_at, ${closed} as closed,
+        (select cf.values->>'ig_seguidores' from autoflow.contact_fields cf where cf.contact_id = c.id) as followers,
+        (select cf.values->>'ig_verificado' = 'sim' from autoflow.contact_fields cf where cf.contact_id = c.id) as verified,
         m.text as last_text, m.direction as last_direction, m.source as last_source, m.created_at as last_at
       from autoflow.contacts c
       join lateral (
