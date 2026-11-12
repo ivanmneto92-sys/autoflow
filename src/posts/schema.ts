@@ -9,6 +9,8 @@ export type PostStatus = 'scheduled' | 'publishing' | 'published' | 'failed' | '
 export const MediaItemSchema = z.object({
   url: z.string().url(),
   kind: z.enum(['image', 'video']),
+  // Reels: quadro do vídeo usado como capa, em milissegundos desde o início (vai para a Meta como thumb_offset)
+  thumb_offset_ms: z.number().int().min(0).max(15 * 60 * 1000).optional(),
 });
 export type MediaItem = z.infer<typeof MediaItemSchema>;
 

@@ -77,7 +77,14 @@ function containerParams(post: DuePost): Record<string, string> {
   const item = post.media[0];
   if (!item) throw new PublishError('Publicação sem mídia');
   if (post.media_type === 'IMAGE') return { image_url: item.url, caption: post.caption };
-  return { media_type: 'REELS', video_url: item.url, caption: post.caption, share_to_feed: 'true' };
+  return {
+    media_type: 'REELS',
+    video_url: item.url,
+    caption: post.caption,
+    share_to_feed: 'true',
+    // Capa escolhida pelo quadro do vídeo (sem isso a Meta usa o primeiro quadro)
+    ...(item.thumb_offset_ms !== undefined ? { thumb_offset: String(item.thumb_offset_ms) } : {}),
+  };
 }
 
 /**

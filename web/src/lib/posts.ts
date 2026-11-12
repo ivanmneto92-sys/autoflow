@@ -16,7 +16,7 @@ export interface Post {
   id: string;
   ig_account_id: string;
   media_type: MediaType;
-  media: { url: string; kind: 'image' | 'video' }[];
+  media: { url: string; kind: 'image' | 'video'; thumb_offset_ms?: number }[];
   caption: string;
   scheduled_at: string;
   status: PostStatus;

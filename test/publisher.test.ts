@@ -115,6 +115,16 @@ describe('publicador de posts', () => {
     expect(ig.created[0]).toMatchObject({ media_type: 'REELS', video_url: 'https://api.test/media/w/v.mp4', share_to_feed: 'true' });
     expect(repo.log.filter((l) => l === 'hb').length).toBe(2);
     expect(repo.state.trigger).toBeUndefined();
+    expect(ig.created[0]).not.toHaveProperty('thumb_offset');
+  });
+
+  it('Reels com capa escolhida manda o quadro (thumb_offset em ms)', async () => {
+    const repo = new MemRepo();
+    const ig = new FakePublisher();
+    ig.statuses = ['FINISHED'];
+    const p = post({ media_type: 'REELS', media: [{ url: 'https://api.test/media/w/v.mp4', kind: 'video', thumb_offset_ms: 3200 }], automation: null });
+    expect(await publishPost(deps(repo, ig), p)).toBe('published');
+    expect(ig.created[0]).toMatchObject({ media_type: 'REELS', thumb_offset: '3200' });
   });
 
   it('mídia recusada pela Meta: falha sem publicar', async () => {

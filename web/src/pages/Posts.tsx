@@ -324,11 +324,13 @@ function PostRow({
   );
 }
 
-function Thumb({ media, big }: { media?: { url: string; kind: 'image' | 'video' }; big?: boolean }) {
+function Thumb({ media, big }: { media?: { url: string; kind: 'image' | 'video'; thumb_offset_ms?: number }; big?: boolean }) {
   const cls = big ? 'post-thumb big' : 'post-thumb';
   if (!media) return <div className={cls} />;
+  // Mostra o quadro escolhido como capa (ou meio segundo, se não escolheu)
+  const t = media.thumb_offset_ms !== undefined ? Math.max(0.05, media.thumb_offset_ms / 1000) : 0.5;
   return media.kind === 'video' ? (
-    <video className={cls} src={`${media.url}#t=0.5`} muted playsInline preload="metadata" controls={big} />
+    <video className={cls} src={`${media.url}#t=${t}`} muted playsInline preload="metadata" controls={big} />
   ) : (
     <img className={cls} src={media.url} alt="" />
   );
@@ -478,7 +480,7 @@ function imageRatio(url: string): Promise<number | undefined> {
     i.src = url;
   });
 }
-type MediaItem = { url: string; kind: 'image' | 'video' };
+type MediaItem = { url: string; kind: 'image' | 'video'; thumb_offset_ms?: number };
 
 function defaultWhen(): string {
   const d = new Date(Date.now() + 60 * 60_000);
@@ -517,6 +519,7 @@ export function PostForm({
   const [sel, setSel] = useState(0);
   const [progress, setProgress] = useState<number | null>(null);
   const [upLabel, setUpLabel] = useState('');
+  const [dragOver, setDragOver] = useState(false);
   const media = items[Math.min(sel, items.length - 1)] ?? null;
   const isCarousel = type === 'CAROUSEL';
   const ratioOf = useRef<number | undefined>(undefined); // proporção da 1ª foto do carrossel
@@ -733,7 +736,21 @@ export function PostForm({
                 ))}
               </div>
             )}
-            <label className="upload-box" style={isCarousel && items.length >= CAROUSEL_MAX ? { display: 'none' } : undefined}>
+            <label
+              className={`upload-box ${dragOver ? 'drag' : ''}`}
+              style={isCarousel && items.length >= CAROUSEL_MAX ? { display: 'none' } : undefined}
+              // Arrastar e soltar o arquivo direto aqui
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (progress === null) setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                if (progress === null && e.dataTransfer.files.length) pick(e.dataTransfer.files);
+              }}
+            >
               <input
                 type="file"
                 multiple={isCarousel}
@@ -754,9 +771,20 @@ export function PostForm({
                   </div>
                 </div>
               ) : (
-                <span className="row">
-                  <Icon name="upload" />{' '}
-                  {isCarousel ? (items.length ? 'Adicionar mais' : 'Escolher fotos (pode selecionar várias)') : media ? 'Trocar arquivo' : 'Escolher arquivo'}
+                <span className="upload-text">
+                  <span className="row">
+                    <Icon name="upload" />{' '}
+                    {dragOver
+                      ? 'Solte para enviar'
+                      : isCarousel
+                        ? items.length
+                          ? 'Adicionar mais'
+                          : 'Escolher fotos (pode selecionar várias)'
+                        : media
+                          ? 'Trocar arquivo'
+                          : 'Escolher arquivo'}
+                  </span>
+                  {!dragOver && <span className="small muted">ou arraste {isCarousel ? 'os arquivos' : 'o arquivo'} para cá</span>}
                 </span>
               )}
             </label>
@@ -769,6 +797,15 @@ export function PostForm({
             </span>
             {note && <span className="hint" style={{ color: 'var(--warning)' }}>{note}</span>}
           </div>
+
+          {type === 'REELS' && items[0]?.kind === 'video' && progress === null && (
+            <CoverPicker
+              key={items[0].url}
+              url={items[0].url}
+              offsetMs={items[0].thumb_offset_ms}
+              onChange={(ms) => setItems((cur) => (cur[0] ? [{ ...cur[0], thumb_offset_ms: ms }] : cur))}
+            />
+          )}
 
           <div className="field">
             <label className="label">Legenda</label>
@@ -789,7 +826,7 @@ export function PostForm({
               </label>
               {mode === 'schedule' && <input className="input" style={{ width: 'auto' }} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />}
             </div>
-            <span className="hint">O robô publica no horário marcado. O computador com o autoflow precisa estar ligado nessa hora.</span>
+            <span className="hint">O autoflow publica sozinho no horário marcado, mesmo com o seu computador desligado.</span>
           </div>
         </div>
 
@@ -894,5 +931,68 @@ export function PostForm({
         />
       )}
     </Modal>
+  );
+}
+
+/** Capa do Reels: arrasta pela linha do tempo e o quadro que aparece vira a capa. */
+function CoverPicker({ url, offsetMs, onChange }: { url: string; offsetMs?: number; onChange: (ms: number | undefined) => void }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [duration, setDuration] = useState(0);
+  const [t, setT] = useState((offsetMs ?? 0) / 1000);
+  const seek = (sec: number) => {
+    const v = Math.min(Math.max(0, sec), Math.max(0, duration - 0.05));
+    setT(v);
+    if (ref.current) ref.current.currentTime = v;
+    onChange(Math.round(v * 1000));
+  };
+  const fmt = (sec: number) => `${Math.floor(sec / 60)}:${(sec % 60).toFixed(1).padStart(4, '0')}`;
+  return (
+    <div className="field">
+      <label className="label">Capa do Reels</label>
+      <div className="cover-picker">
+        <video
+          ref={ref}
+          src={url}
+          muted
+          playsInline
+          preload="auto"
+          onLoadedMetadata={(e) => {
+            const d = e.currentTarget.duration;
+            setDuration(Number.isFinite(d) ? d : 0);
+            e.currentTarget.currentTime = Math.max(0.05, t);
+          }}
+        />
+        <div className="cover-controls">
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0.1, duration)}
+            step={0.1}
+            value={t}
+            disabled={!duration}
+            onChange={(e) => seek(Number(e.target.value))}
+            aria-label="Escolher o quadro da capa"
+          />
+          <div className="row small" style={{ gap: 6 }}>
+            <button type="button" className="btn btn-sm" onClick={() => seek(t - 0.1)} disabled={!duration} title="Voltar um pouco">
+              ‹
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => seek(t + 0.1)} disabled={!duration} title="Avançar um pouco">
+              ›
+            </button>
+            <span className="muted nowrap">
+              <b>{fmt(t)}</b>
+              {duration ? ` / ${fmt(duration)}` : ''}
+            </span>
+          </div>
+          {offsetMs !== undefined && (
+            <button type="button" className="btn btn-ghost btn-sm" style={{ justifySelf: 'start' }} onClick={() => (seek(0), onChange(undefined))}>
+              Voltar ao primeiro quadro
+            </button>
+          )}
+          <span className="hint">Arraste até o quadro que você quer na capa. É ele que aparece no feed e no perfil.</span>
+        </div>
+      </div>
+    </div>
   );
 }
